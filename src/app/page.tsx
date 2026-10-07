@@ -367,100 +367,98 @@ export default function HomePage() {
       {/* ─────────────────────────────────────────────────
           HOW IT WORKS 4-STEP TIMELINE — matching user screenshot
       ───────────────────────────────────────────────── */}
-      <section className="py-10 px-5 sm:px-8 bg-[#060a12] border-b border-gray-800/60">
-        <div className="max-w-7xl mx-auto bg-[#09111d] border border-gray-800/80 rounded-2xl p-5 sm:p-7 shadow-2xl">
+      <section className="py-8 sm:py-10 px-3 sm:px-8 bg-[#060a12] border-b border-gray-800/60">
+        <div className="max-w-7xl mx-auto bg-[#09111d] border border-gray-800/80 rounded-2xl p-3.5 sm:p-7 shadow-2xl overflow-hidden">
           {/* Header row */}
-          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-800/60">
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+          <div className="flex items-center justify-between mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-gray-800/60">
+            <h2 className="text-lg sm:text-2xl font-black text-white tracking-tight">
               How It Works
             </h2>
             <button
               onClick={() => router.push('/faq')}
-              className="text-xs sm:text-sm font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition cursor-pointer"
+              className="text-[11px] sm:text-sm font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition cursor-pointer"
             >
               <span>Learn more</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </div>
 
-          {/* Single-line 4-Step Horizontal Row */}
-          <div className="overflow-x-auto custom-scrollbar pb-2">
-            <div className="flex items-start justify-between min-w-[680px] lg:min-w-0 gap-3 sm:gap-6">
-              
-              {/* Step 1 */}
-              <div className="flex-1 flex flex-col gap-3.5 relative">
-                <div className="flex items-center justify-between pr-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-full border-2 border-orange-500 bg-orange-500/10 text-orange-400 font-black text-sm flex items-center justify-center shrink-0">
-                      1
-                    </div>
-                    <ShoppingCart className="w-6 h-6 text-white stroke-[2.2]" />
+          {/* 4-Step Grid — Fits 100% on screen in 1 single row without any scrollbar */}
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-4 lg:gap-6 w-full">
+            
+            {/* Step 1 */}
+            <div className="flex flex-col gap-2 sm:gap-3.5 relative">
+              <div className="flex items-center justify-between pr-0.5 sm:pr-2">
+                <div className="flex items-center gap-1.5 sm:gap-2.5">
+                  <div className="w-6.5 h-6.5 sm:w-9 sm:h-9 rounded-full border-2 border-orange-500 bg-orange-500/10 text-orange-400 font-black text-[11px] sm:text-sm flex items-center justify-center shrink-0">
+                    1
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-600 shrink-0" />
+                  <ShoppingCart className="w-4 h-4 sm:w-6 sm:h-6 text-white stroke-[2.2] shrink-0" />
                 </div>
-                <div>
-                  <h3 className="text-sm sm:text-base font-bold text-white mb-1">Get Your Code</h3>
-                  <p className="text-xs text-gray-400 leading-relaxed max-w-[170px]">
-                    Purchase from GAMIVO, G2A or Driffle and receive a code.
-                  </p>
-                </div>
+                <ChevronRight className="w-3 h-3 sm:w-5 sm:h-5 text-gray-600 shrink-0" />
               </div>
-
-              {/* Step 2 */}
-              <div className="flex-1 flex flex-col gap-3.5 relative">
-                <div className="flex items-center justify-between pr-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-full border-2 border-blue-500 bg-blue-500/10 text-blue-400 font-black text-sm flex items-center justify-center shrink-0">
-                      2
-                    </div>
-                    <KeyRound className="w-6 h-6 text-blue-400 stroke-[2.2]" />
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-gray-600 shrink-0" />
-                </div>
-                <div>
-                  <h3 className="text-sm sm:text-base font-bold text-white mb-1">Redeem Code</h3>
-                  <p className="text-xs text-gray-400 leading-relaxed max-w-[170px]">
-                    Enter your code on our website to create your order.
-                  </p>
-                </div>
+              <div>
+                <h3 className="text-[11px] sm:text-base font-bold text-white mb-0.5 sm:mb-1 leading-tight">Get Your Code</h3>
+                <p className="text-[9px] sm:text-xs text-gray-400 leading-tight sm:leading-relaxed">
+                  Purchase from GAMIVO, G2A or Driffle and receive a code.
+                </p>
               </div>
-
-              {/* Step 3 */}
-              <div className="flex-1 flex flex-col gap-3.5 relative">
-                <div className="flex items-center justify-between pr-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-full border-2 border-purple-500 bg-purple-500/10 text-purple-400 font-black text-sm flex items-center justify-center shrink-0">
-                      3
-                    </div>
-                    <Settings className="w-6 h-6 text-white stroke-[2.2]" />
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-gray-600 shrink-0" />
-                </div>
-                <div>
-                  <h3 className="text-sm sm:text-base font-bold text-white mb-1">Processing</h3>
-                  <p className="text-xs text-gray-400 leading-relaxed max-w-[170px]">
-                    Your order is being prepared. Usually 1 hour to 24 hours.
-                  </p>
-                </div>
-              </div>
-
-              {/* Step 4 */}
-              <div className="flex-1 flex flex-col gap-3.5 relative">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-full border-2 border-emerald-500 bg-emerald-500/10 text-emerald-400 font-black text-sm flex items-center justify-center shrink-0">
-                    4
-                  </div>
-                  <CheckCircle2 className="w-6 h-6 text-emerald-400 stroke-[2.2]" />
-                </div>
-                <div>
-                  <h3 className="text-sm sm:text-base font-bold text-white mb-1">Get Your Account / Key</h3>
-                  <p className="text-xs text-gray-400 leading-relaxed max-w-[170px]">
-                    Check your order status and view your account or key details.
-                  </p>
-                </div>
-              </div>
-
             </div>
+
+            {/* Step 2 */}
+            <div className="flex flex-col gap-2 sm:gap-3.5 relative">
+              <div className="flex items-center justify-between pr-0.5 sm:pr-2">
+                <div className="flex items-center gap-1.5 sm:gap-2.5">
+                  <div className="w-6.5 h-6.5 sm:w-9 sm:h-9 rounded-full border-2 border-blue-500 bg-blue-500/10 text-blue-400 font-black text-[11px] sm:text-sm flex items-center justify-center shrink-0">
+                    2
+                  </div>
+                  <KeyRound className="w-4 h-4 sm:w-6 sm:h-6 text-blue-400 stroke-[2.2] shrink-0" />
+                </div>
+                <ChevronRight className="w-3 h-3 sm:w-5 sm:h-5 text-gray-600 shrink-0" />
+              </div>
+              <div>
+                <h3 className="text-[11px] sm:text-base font-bold text-white mb-0.5 sm:mb-1 leading-tight">Redeem Code</h3>
+                <p className="text-[9px] sm:text-xs text-gray-400 leading-tight sm:leading-relaxed">
+                  Enter your code on our website to create your order.
+                </p>
+              </div>
+            </div>
+
+            {/* Step 3 */}
+            <div className="flex flex-col gap-2 sm:gap-3.5 relative">
+              <div className="flex items-center justify-between pr-0.5 sm:pr-2">
+                <div className="flex items-center gap-1.5 sm:gap-2.5">
+                  <div className="w-6.5 h-6.5 sm:w-9 sm:h-9 rounded-full border-2 border-purple-500 bg-purple-500/10 text-purple-400 font-black text-[11px] sm:text-sm flex items-center justify-center shrink-0">
+                    3
+                  </div>
+                  <Settings className="w-4 h-4 sm:w-6 sm:h-6 text-white stroke-[2.2] shrink-0" />
+                </div>
+                <ChevronRight className="w-3 h-3 sm:w-5 sm:h-5 text-gray-600 shrink-0" />
+              </div>
+              <div>
+                <h3 className="text-[11px] sm:text-base font-bold text-white mb-0.5 sm:mb-1 leading-tight">Processing</h3>
+                <p className="text-[9px] sm:text-xs text-gray-400 leading-tight sm:leading-relaxed">
+                  Your order is being prepared. Usually 1 hour to 24 hours.
+                </p>
+              </div>
+            </div>
+
+            {/* Step 4 */}
+            <div className="flex flex-col gap-2 sm:gap-3.5 relative">
+              <div className="flex items-center gap-1.5 sm:gap-2.5">
+                <div className="w-6.5 h-6.5 sm:w-9 sm:h-9 rounded-full border-2 border-emerald-500 bg-emerald-500/10 text-emerald-400 font-black text-[11px] sm:text-sm flex items-center justify-center shrink-0">
+                  4
+                </div>
+                <CheckCircle2 className="w-4 h-4 sm:w-6 sm:h-6 text-emerald-400 stroke-[2.2] shrink-0" />
+              </div>
+              <div>
+                <h3 className="text-[11px] sm:text-base font-bold text-white mb-0.5 sm:mb-1 leading-tight">Get Your Account / Key</h3>
+                <p className="text-[9px] sm:text-xs text-gray-400 leading-tight sm:leading-relaxed">
+                  Check your order status and view your account or key details.
+                </p>
+              </div>
+            </div>
+
           </div>
         </div>
       </section>

@@ -83,8 +83,11 @@ export default function AdminPage() {
 
   // Fulfill Order Modal State
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [deliveryType, setDeliveryType] = useState<'account' | 'key'>('account');
   const [accountEmail, setAccountEmail] = useState('');
   const [accountPassword, setAccountPassword] = useState('');
+  const [twoFactorKey, setTwoFactorKey] = useState('');
+  const [productKey, setProductKey] = useState('');
   const [instructions, setInstructions] = useState('');
   const [orderStatus, setOrderStatus] = useState<OrderStatus>('completed');
 
@@ -162,10 +165,14 @@ export default function AdminPage() {
   // Fulfill Order Action
   const openFulfillModal = (orderItem: Order) => {
     setEditingOrder(orderItem);
+    const dType = orderItem.deliveryType || (orderItem.productName?.toLowerCase().includes('key') ? 'key' : 'account');
+    setDeliveryType(dType);
     setAccountEmail(orderItem.accountEmail || '');
     setAccountPassword(orderItem.accountPassword || '');
+    setTwoFactorKey(orderItem.twoFactorKey || '');
+    setProductKey(orderItem.productKey || '');
     setInstructions(
-      orderItem.instructions || INSTRUCTION_TEMPLATES[0].text
+      orderItem.instructions || (dType === 'key' ? 'This is your product key. Redeem it on Xbox/Microsoft Store to activate your product.' : INSTRUCTION_TEMPLATES[0].text)
     );
     setOrderStatus(orderItem.status === 'processing' ? 'completed' : orderItem.status);
   };
@@ -176,8 +183,11 @@ export default function AdminPage() {
 
     try {
       await updateOrderDelivery(editingOrder.id, {
-        accountEmail,
-        accountPassword,
+        deliveryType,
+        accountEmail: deliveryType === 'account' ? accountEmail : undefined,
+        accountPassword: deliveryType === 'account' ? accountPassword : undefined,
+        twoFactorKey: deliveryType === 'account' ? twoFactorKey : undefined,
+        productKey: deliveryType === 'key' ? productKey : undefined,
         instructions,
         status: orderStatus,
       });
@@ -1008,51 +1018,122 @@ export default function AdminPage() {
                 <div>Code: <strong className="text-amber-300 font-mono">{editingOrder.code}</strong></div>
               </div>
 
+              {/* Delivery Type Selector */}
               <div>
-                <label className="text-gray-300 font-bold block mb-1">Account Email / Username:</label>
-                <input
-                  type="text"
-                  value={accountEmail}
-                  onChange={(e) => setAccountEmail(e.target.value)}
-                  placeholder="e.g. xbox.acc99@outlook.com"
-                  className="w-full bg-gray-950 border border-gray-700 text-cyan-300 font-mono rounded-lg p-2.5 outline-none"
-                  required
-                />
+                <label className="text-gray-300 font-bold block mb-1.5">Select Delivery Type:</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeliveryType('account');
+                      if (!instructions || instructions.includes('product key')) {
+                        setInstructions(INSTRUCTION_TEMPLATES[0].text);
+                      }
+                    }}
+                    className={`py-2 px-3 rounded-lg font-bold text-xs border transition flex items-center justify-center space-x-2 ${
+                      deliveryType === 'account'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                        : 'bg-gray-950 border-gray-700 text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <span>👤 Account Delivery</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeliveryType('key');
+                      if (!instructions || instructions.includes('Xbox app')) {
+                        setInstructions('This is your product key. Redeem it on Xbox/Microsoft Store to activate your product.');
+                      }
+                    }}
+                    className={`py-2 px-3 rounded-lg font-bold text-xs border transition flex items-center justify-center space-x-2 ${
+                      deliveryType === 'key'
+                        ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
+                        : 'bg-gray-950 border-gray-700 text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <span>🔑 Product Key Delivery</span>
+                  </button>
+                </div>
               </div>
 
-              <div>
-                <label className="text-gray-300 font-bold block mb-1">Account Password:</label>
-                <input
-                  type="text"
-                  value={accountPassword}
-                  onChange={(e) => setAccountPassword(e.target.value)}
-                  placeholder="e.g. PassX99!2026"
-                  className="w-full bg-gray-950 border border-gray-700 text-amber-300 font-mono rounded-lg p-2.5 outline-none"
-                  required
-                />
-              </div>
+              {/* ACCOUNT DELIVERY FIELDS */}
+              {deliveryType === 'account' ? (
+                <>
+                  <div>
+                    <label className="text-gray-300 font-bold block mb-1">Account Email / Username:</label>
+                    <input
+                      type="text"
+                      value={accountEmail}
+                      onChange={(e) => setAccountEmail(e.target.value)}
+                      placeholder="e.g. gamer.delivery.acc99@outlook"
+                      className="w-full bg-gray-950 border border-gray-700 text-cyan-300 font-mono rounded-lg p-2.5 outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-gray-300 font-bold block mb-1">Account Password:</label>
+                    <input
+                      type="text"
+                      value={accountPassword}
+                      onChange={(e) => setAccountPassword(e.target.value)}
+                      placeholder="e.g. PassX99!2026"
+                      className="w-full bg-gray-950 border border-gray-700 text-amber-300 font-mono rounded-lg p-2.5 outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-gray-300 font-bold block mb-1">2FA Key (Optional):</label>
+                    <input
+                      type="text"
+                      value={twoFactorKey}
+                      onChange={(e) => setTwoFactorKey(e.target.value)}
+                      placeholder="e.g. JBSWY3DPEHPK3PXP"
+                      className="w-full bg-gray-950 border border-gray-700 text-emerald-300 font-mono rounded-lg p-2.5 outline-none uppercase"
+                    />
+                  </div>
+                </>
+              ) : (
+                /* PRODUCT KEY DELIVERY FIELDS */
+                <div>
+                  <label className="text-gray-300 font-bold block mb-1">Product Activation Key:</label>
+                  <input
+                    type="text"
+                    value={productKey}
+                    onChange={(e) => setProductKey(e.target.value.toUpperCase())}
+                    placeholder="e.g. JBSWY3DPEHPK3PXP"
+                    className="w-full bg-gray-950 border border-gray-700 text-cyan-300 font-mono rounded-lg p-2.5 outline-none font-bold uppercase tracking-widest text-sm"
+                    required
+                  />
+                </div>
+              )}
 
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <label className="text-gray-300 font-bold">Login Instructions & Setup Notes:</label>
-                  <div className="flex gap-1">
-                    {INSTRUCTION_TEMPLATES.map((tmpl, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setInstructions(tmpl.text)}
-                        className="text-[10px] bg-gray-800 hover:bg-gray-700 text-cyan-400 px-2 py-0.5 rounded border border-gray-700"
-                      >
-                        {tmpl.label.split(' ')[0]}
-                      </button>
-                    ))}
-                  </div>
+                  <label className="text-gray-300 font-bold">Instructions & Notes:</label>
+                  {deliveryType === 'account' && (
+                    <div className="flex gap-1">
+                      {INSTRUCTION_TEMPLATES.map((tmpl, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setInstructions(tmpl.text)}
+                          className="text-[10px] bg-gray-800 hover:bg-gray-700 text-cyan-400 px-2 py-0.5 rounded border border-gray-700"
+                        >
+                          {tmpl.label.split(' ')[0]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <textarea
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
-                  placeholder="Step by step login instructions..."
-                  className="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded-lg p-2.5 outline-none h-28 font-sans"
+                  placeholder="Step by step instructions for customer..."
+                  className="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded-lg p-2.5 outline-none h-24 font-sans"
                 />
               </div>
 
@@ -1063,7 +1144,7 @@ export default function AdminPage() {
                   onChange={(e: any) => setOrderStatus(e.target.value)}
                   className="w-full bg-gray-950 border border-gray-700 text-white rounded-lg p-2.5 outline-none"
                 >
-                  <option value="completed">✓ Completed (Deliver Account Credentials)</option>
+                  <option value="completed">✓ Completed (Deliver Credentials / Key)</option>
                   <option value="processing">⏳ Processing (Keep In Queue)</option>
                 </select>
               </div>

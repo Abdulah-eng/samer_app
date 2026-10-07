@@ -1,5 +1,6 @@
 export type OrderStatus = 'processing' | 'completed' | 'cancelled';
 export type CodeStatus = 'unused' | 'processing' | 'completed' | 'cancelled';
+export type DeliveryType = 'account' | 'key';
 
 export interface Product {
   id: string;
@@ -26,8 +27,11 @@ export interface Order {
   productId: string;
   productName: string;
   status: OrderStatus;
+  deliveryType?: DeliveryType;
   accountEmail?: string;
   accountPassword?: string;
+  twoFactorKey?: string;
+  productKey?: string;
   instructions?: string;
   customerIp?: string;
   createdAt: string;

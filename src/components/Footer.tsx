@@ -26,7 +26,7 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTerms }) => {
               <img
                 src="/logo2.png"
                 alt="IMOSTRADA DIGITAL PRODUCTS"
-                className="h-9 w-auto object-contain transition-transform group-hover:scale-105"
+                className="h-11 sm:h-13 w-auto object-contain transition-transform group-hover:scale-105"
               />
             </Link>
             <p className="text-xs text-gray-400 max-w-sm">

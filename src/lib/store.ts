@@ -1,4 +1,4 @@
-import { Product, RedeemCode, Order, StoreSettings, OrderStatus } from './types';
+import { Product, RedeemCode, Order, StoreSettings, OrderStatus, DeliveryType } from './types';
 import { supabase, isSupabaseConfigured } from './supabase';
 
 const STORAGE_KEYS = {
@@ -12,23 +12,23 @@ const STORAGE_KEYS = {
 const INITIAL_PRODUCTS: Product[] = [
   {
     id: 'prod-1',
-    name: 'Xbox Game Pass Ultimate 12 Months',
+    name: 'Xbox Game Pass Ultimate 12 Months Account',
     category: 'Subscription',
     description: 'Xbox Live & Game Pass Ultimate account access',
     createdAt: '2026-10-01T00:00:00.000Z',
   },
   {
     id: 'prod-2',
-    name: 'PlayStation Plus Deluxe 1 Year',
-    category: 'Subscription',
-    description: 'PSN Deluxe 12-month membership account',
+    name: 'PlayStation Plus Deluxe 1 Year Key',
+    category: 'Game Key',
+    description: 'PSN Deluxe 12-month membership key',
     createdAt: '2026-10-01T00:00:00.000Z',
   },
   {
     id: 'prod-3',
-    name: 'Grand Theft Auto V Premium Edition',
-    category: 'Game Account',
-    description: 'Steam Account with GTA V Premium Edition',
+    name: 'Grand Theft Auto V Premium Edition Key',
+    category: 'Game Key',
+    description: 'Steam Activation Key for GTA V',
     createdAt: '2026-10-01T00:00:00.000Z',
   },
 ];
@@ -38,7 +38,7 @@ const INITIAL_CODES: RedeemCode[] = [
     id: 'code-1',
     code: 'GAMIVO-XBOX-9981',
     productId: 'prod-1',
-    productName: 'Xbox Game Pass Ultimate 12 Months',
+    productName: 'Xbox Game Pass Ultimate 12 Months Account',
     status: 'unused',
     createdAt: '2026-10-01T00:00:00.000Z',
   },
@@ -46,7 +46,7 @@ const INITIAL_CODES: RedeemCode[] = [
     id: 'code-2',
     code: 'GAMIVO-PSN-4412',
     productId: 'prod-2',
-    productName: 'PlayStation Plus Deluxe 1 Year',
+    productName: 'PlayStation Plus Deluxe 1 Year Key',
     status: 'unused',
     createdAt: '2026-10-01T00:00:00.000Z',
   },
@@ -54,7 +54,7 @@ const INITIAL_CODES: RedeemCode[] = [
     id: 'code-3',
     code: 'GAMIVO-GTA-8823',
     productId: 'prod-3',
-    productName: 'Grand Theft Auto V Premium Edition',
+    productName: 'Grand Theft Auto V Premium Edition Key',
     status: 'unused',
     createdAt: '2026-10-01T00:00:00.000Z',
   },
@@ -62,10 +62,19 @@ const INITIAL_CODES: RedeemCode[] = [
     id: 'code-4',
     code: 'KINGUIN-DEMO-0001',
     productId: 'prod-1',
-    productName: 'Xbox Game Pass Ultimate 12 Months',
+    productName: 'Xbox Game Pass Ultimate 12 Months Account',
     status: 'completed',
     createdAt: '2026-10-01T00:00:00.000Z',
     usedAt: '2026-10-01T01:00:00.000Z',
+  },
+  {
+    id: 'code-5',
+    code: 'KINGUIN-DEMO-0002',
+    productId: 'prod-2',
+    productName: 'PlayStation Plus Deluxe 1 Year Key',
+    status: 'completed',
+    createdAt: '2026-10-01T00:00:00.000Z',
+    usedAt: '2026-10-01T02:00:00.000Z',
   },
 ];
 
@@ -75,23 +84,39 @@ const INITIAL_ORDERS: Order[] = [
     orderNumber: 'ORD-98241',
     code: 'KINGUIN-DEMO-0001',
     productId: 'prod-1',
-    productName: 'Xbox Game Pass Ultimate 12 Months',
+    productName: 'Xbox Game Pass Ultimate 12 Months Account',
     status: 'completed',
+    deliveryType: 'account',
     accountEmail: 'gamer.delivery.acc99@outlook.com',
     accountPassword: 'PassX99!2026',
+    twoFactorKey: 'JBSWY3DPEHPK3PXP',
     instructions:
-      '1. Log into your Xbox App or Console using the provided account email and password.\n2. Go to Settings > General > Personalization and set as Home Xbox.\n3. Switch back to your personal main account to play all downloaded games!',
+      '1. Open Xbox app or console.\n2. Add new account using the email and password above.\n3. Add the 2FA key to Google Authenticator or any authenticator app (https://2fa.co.com/).\n4. Set as Home Xbox to share subscription features across all profiles.\n5. Enjoy gaming!',
     createdAt: '2026-10-01T01:00:00.000Z',
     updatedAt: '2026-10-01T01:15:00.000Z',
+  },
+  {
+    id: 'ord-1002',
+    orderNumber: 'ORD-98242',
+    code: 'KINGUIN-DEMO-0002',
+    productId: 'prod-2',
+    productName: 'PlayStation Plus Deluxe 1 Year Key',
+    status: 'completed',
+    deliveryType: 'key',
+    productKey: 'JBSWY3DPEHPK3PXP',
+    instructions:
+      'This is your product key. Redeem it on Xbox/Microsoft Store to activate your product.',
+    createdAt: '2026-10-01T02:00:00.000Z',
+    updatedAt: '2026-10-01T02:15:00.000Z',
   },
 ];
 
 const INITIAL_SETTINGS: StoreSettings = {
-  storeName: 'TURKEPINSTORE',
-  merchantName: 'turkepinstore',
+  storeName: 'IMOSTRADA',
+  merchantName: 'imostrada',
   isOnline: true,
   noticeText:
-    'Delivery time starts after the redeem request is submitted. Non-subscription accounts are typically delivered within 15-30 minutes.',
+    'Delivery time starts after the redeem request is submitted. Products are delivered between 1 hour to 24 hours.',
 };
 
 // Local storage helpers
@@ -321,7 +346,6 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{ success: b
   }
 
   if (foundCode.status === 'completed' || foundCode.status === 'processing') {
-    // If already redeemed, check if an existing order exists and return it
     const orders = await getOrders();
     const existingOrder = orders.find((o) => o.code.toUpperCase() === cleanCode);
     if (existingOrder) {
@@ -340,6 +364,10 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{ success: b
     };
   }
 
+  // Determine default delivery type based on product name/category
+  const isKeyType = foundCode.productName?.toLowerCase().includes('key') || foundCode.productName?.toLowerCase().includes('code');
+  const defaultDeliveryType: DeliveryType = isKeyType ? 'key' : 'account';
+
   // Create new Order with status 'processing'
   const orderNumber = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
   const newOrder: Order = {
@@ -347,8 +375,9 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{ success: b
     orderNumber,
     code: cleanCode,
     productId: foundCode.productId,
-    productName: foundCode.productName || 'Digital Game Account',
+    productName: foundCode.productName || 'Digital Product',
     status: 'processing',
+    deliveryType: defaultDeliveryType,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -365,6 +394,7 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{ success: b
       product_id: foundCode.productId,
       product_name: newOrder.productName,
       status: 'processing',
+      delivery_type: defaultDeliveryType,
     });
   }
 
@@ -392,8 +422,11 @@ export async function getOrders(): Promise<Order[]> {
         productId: item.product_id,
         productName: item.product_name,
         status: item.status,
+        deliveryType: (item.delivery_type as DeliveryType) || 'account',
         accountEmail: item.account_email,
         accountPassword: item.account_password,
+        twoFactorKey: item.two_factor_key,
+        productKey: item.product_key,
         instructions: item.instructions,
         customerIp: item.customer_ip,
         createdAt: item.created_at,
@@ -419,8 +452,11 @@ export async function getOrderDetails(codeOrOrderNumber: string): Promise<Order 
 export async function updateOrderDelivery(
   orderId: string,
   deliveryData: {
+    deliveryType?: DeliveryType;
     accountEmail?: string;
     accountPassword?: string;
+    twoFactorKey?: string;
+    productKey?: string;
     instructions?: string;
     status: OrderStatus;
   }
@@ -456,8 +492,11 @@ export async function updateOrderDelivery(
     await supabase
       .from('orders')
       .update({
+        delivery_type: deliveryData.deliveryType || existing.deliveryType || 'account',
         account_email: deliveryData.accountEmail,
         account_password: deliveryData.accountPassword,
+        two_factor_key: deliveryData.twoFactorKey,
+        product_key: deliveryData.productKey,
         instructions: deliveryData.instructions,
         status: deliveryData.status,
         updated_at: updatedOrder.updatedAt,

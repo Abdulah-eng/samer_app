@@ -40,6 +40,14 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
       document.documentElement.classList.add('dark');
     }
 
+    // Check saved language code from cookie
+    const match = document.cookie.match(/(?:^|; )googtrans=([^;]*)/);
+    if (match) {
+      const langCode = match[1].split('/')[2];
+      const found = LANGUAGES.find((l) => l.code === langCode);
+      if (found) setSelectedLang(found);
+    }
+
     // Initialize Google Translate Script dynamically if needed
     if (!document.getElementById('google-translate-script')) {
       const script = document.createElement('script');
@@ -79,12 +87,23 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
     setSelectedLang(lang);
     setIsLangOpen(false);
 
-    // Trigger Google Translate cookie / select element
+    // Set Google Translate cookie for full page translation
+    if (lang.code === 'en') {
+      document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname}`;
+    } else {
+      document.cookie = `googtrans=/en/${lang.code}; path=/;`;
+      document.cookie = `googtrans=/en/${lang.code}; path=/; domain=${window.location.hostname}`;
+    }
+
+    // Trigger select combo if present
     const translateCombo = document.querySelector('.goog-te-combo') as HTMLSelectElement;
     if (translateCombo) {
       translateCombo.value = lang.code;
       translateCombo.dispatchEvent(new Event('change'));
     }
+
+    window.location.reload();
   };
 
   return (

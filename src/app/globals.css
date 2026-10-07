@@ -124,3 +124,30 @@ html.light textarea {
   background: #374151;
   border-radius: 4px;
 }
+
+/* Google Translate Full Page Translator Styles */
+.goog-te-banner-frame {
+  display: none !important;
+}
+body {
+  top: 0px !important;
+}
+.goog-te-gadget {
+  font-size: 0px !important;
+  color: transparent !important;
+}
+.goog-te-gadget span {
+  display: none !important;
+}
+.goog-te-combo {
+  background-color: #0d1629 !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 9999px !important;
+  padding: 4px 10px !important;
+  font-size: 12px !important;
+  outline: none !important;
+}
+#google_translate_element {
+  display: inline-block;
+}

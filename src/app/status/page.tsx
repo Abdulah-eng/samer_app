@@ -265,11 +265,11 @@ function OrderStatusContent() {
                     <Mail className="w-4 h-4 text-cyan-400" />
                     <span>ACCOUNT EMAIL</span>
                   </label>
-                  <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-sm text-cyan-300 justify-between gap-2">
-                    <span className="select-all font-semibold">{order.accountEmail || 'gamer.delivery.acc99@outlook'}</span>
+                  <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-xs sm:text-sm text-cyan-300 justify-between gap-2 overflow-hidden">
+                    <span className="select-all font-semibold break-all min-w-0 flex-1">{order.accountEmail || 'gamer.delivery.acc99@outlook'}</span>
                     <button
                       onClick={() => order.accountEmail && copyToClipboard(order.accountEmail, 'email')}
-                      className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 shrink-0"
+                      className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 shrink-0 cursor-pointer active:scale-95"
                     >
                       {copiedField === 'email' ? (
                         <>
@@ -292,21 +292,21 @@ function OrderStatusContent() {
                     <Lock className="w-4 h-4 text-amber-400" />
                     <span>ACCOUNT PASSWORD</span>
                   </label>
-                  <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-sm text-amber-300 justify-between gap-2">
-                    <span className="select-all font-semibold tracking-wider">
+                  <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-xs sm:text-sm text-amber-300 justify-between gap-2 overflow-hidden">
+                    <span className="select-all font-semibold tracking-wider break-all min-w-0 flex-1">
                       {showPassword ? order.accountPassword : '••••••••••••'}
                     </span>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1.5 shrink-0">
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition text-xs flex items-center space-x-1 border border-gray-700"
+                        className="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition text-xs flex items-center space-x-1 border border-gray-700 cursor-pointer"
                       >
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                       <button
                         onClick={() => order.accountPassword && copyToClipboard(order.accountPassword, 'password')}
-                        className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700"
+                        className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 cursor-pointer active:scale-95"
                       >
                         {copiedField === 'password' ? (
                           <>
@@ -330,13 +330,13 @@ function OrderStatusContent() {
                     <ShieldCheck className="w-4 h-4 text-emerald-400" />
                     <span>2FA KEY</span>
                   </label>
-                  <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-sm text-cyan-400 justify-between gap-2">
-                    <span className="select-all font-semibold tracking-wider">
+                  <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-xs sm:text-sm text-cyan-400 justify-between gap-2 overflow-hidden">
+                    <span className="select-all font-semibold tracking-wider break-all min-w-0 flex-1">
                       {order.twoFactorKey || 'JBSWY3DPEHPK3PXP'}
                     </span>
                     <button
                       onClick={() => copyToClipboard(order.twoFactorKey || 'JBSWY3DPEHPK3PXP', '2fa')}
-                      className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 shrink-0"
+                      className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 shrink-0 cursor-pointer active:scale-95"
                     >
                       {copiedField === '2fa' ? (
                         <>

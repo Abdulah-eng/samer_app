@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Globe, Moon, Sun, ShieldCheck, ChevronDown, Check } from 'lucide-react';
+import { Globe, ShieldCheck, ChevronDown, Check } from 'lucide-react';
 import { StoreSettings } from '@/lib/types';
 
 interface HeaderProps {
@@ -20,25 +20,13 @@ const LANGUAGES = [
 ];
 
 export const Header: React.FC<HeaderProps> = ({ settings }) => {
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [selectedLang, setSelectedLang] = useState(LANGUAGES[0]);
   const [isLangOpen, setIsLangOpen] = useState(false);
 
   useEffect(() => {
-    // Check initial theme from localStorage or document class
-    const savedTheme = localStorage.getItem('theme') as 'dark' | 'light' | null;
-    if (savedTheme) {
-      setTheme(savedTheme);
-      if (savedTheme === 'light') {
-        document.documentElement.classList.add('light');
-        document.documentElement.classList.remove('dark');
-      } else {
-        document.documentElement.classList.add('dark');
-        document.documentElement.classList.remove('light');
-      }
-    } else {
-      document.documentElement.classList.add('dark');
-    }
+    // Force dark theme permanently
+    document.documentElement.classList.add('dark');
+    document.documentElement.classList.remove('light');
 
     // Check saved language code from cookie
     const match = document.cookie.match(/(?:^|; )googtrans=([^;]*)/);
@@ -70,19 +58,6 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
     }
   }, []);
 
-  const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(nextTheme);
-    localStorage.setItem('theme', nextTheme);
-    if (nextTheme === 'light') {
-      document.documentElement.classList.add('light');
-      document.documentElement.classList.remove('dark');
-    } else {
-      document.documentElement.classList.add('dark');
-      document.documentElement.classList.remove('light');
-    }
-  };
-
   const changeLanguage = (lang: (typeof LANGUAGES)[0]) => {
     setSelectedLang(lang);
     setIsLangOpen(false);
@@ -111,28 +86,28 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
       {/* Hidden container for Google Translate widget */}
       <div id="google_translate_element" className="hidden" />
 
-      <div className="max-w-7xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between gap-3 sm:gap-4">
 
         {/* LEFT: Shop Logo Image */}
         <Link href="/" className="flex items-center shrink-0 group py-1">
           <img
-            src={theme === 'light' ? '/pngphoto.png' : '/logo2.png'}
+            src="/logo2.png"
             alt={settings.storeName || 'IMOSTRADA DIGITAL PRODUCTS'}
-            className="h-5 sm:h-6 w-auto object-contain transition-transform group-hover:scale-105"
+            className="h-4.5 sm:h-6 w-auto object-contain transition-transform group-hover:scale-105"
           />
         </Link>
 
-        {/* CENTER: Marketplace Partner Store Logos (GAMIVO, G2A, Driffle) */}
-        <div className="hidden md:flex items-center gap-6 lg:gap-8">
-          <img src="/img2.png" alt="GAMIVO" className="h-5 sm:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
-          <img src="/img1.png" alt="G2A" className="h-5 sm:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
-          <img src="/img3.png" alt="Driffle" className="h-5 sm:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
+        {/* CENTER: Marketplace Partner Store Logos (GAMIVO, G2A, Driffle) - Mobile Responsive */}
+        <div className="flex items-center gap-2 sm:gap-6 lg:gap-8">
+          <img src="/img2.png" alt="GAMIVO" className="h-3.5 sm:h-5 md:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
+          <img src="/img1.png" alt="G2A" className="h-3.5 sm:h-5 md:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
+          <img src="/img3.png" alt="Driffle" className="h-3.5 sm:h-5 md:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
         </div>
 
-        {/* RIGHT: Status + Language + Theme + Admin */}
+        {/* RIGHT: Status + Language + Admin */}
         <div className="flex items-center gap-2 sm:gap-3">
           {/* Online status pill */}
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-gray-300 bg-[#0d1629] px-3 py-1.5 rounded-full border border-white/10 shrink-0">
+          <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-medium text-gray-300 bg-[#0d1629] px-2.5 sm:px-3 py-1.5 rounded-full border border-white/10 shrink-0">
             <span
               className="w-2 h-2 rounded-full shrink-0"
               style={{
@@ -141,22 +116,22 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
                 animation: settings.isOnline ? 'pulse 2s infinite' : 'none',
               }}
             />
-            <span>
+            <span className="hidden xs:inline">
               We are currently:{' '}
-              <strong style={{ color: settings.isOnline ? '#22c55e' : '#ef4444' }}>
-                {settings.isOnline ? 'ONLINE' : 'OFFLINE'}
-              </strong>
             </span>
+            <strong style={{ color: settings.isOnline ? '#22c55e' : '#ef4444' }}>
+              {settings.isOnline ? 'ONLINE' : 'OFFLINE'}
+            </strong>
           </div>
 
           {/* Language Translator Dropdown */}
-          <div className="relative hidden sm:block">
+          <div className="relative">
             <button
               onClick={() => setIsLangOpen(!isLangOpen)}
-              className="flex items-center gap-1.5 text-[11px] font-medium text-gray-300 bg-[#0d1629] hover:bg-[#111e33] px-3 py-1.5 rounded-full border border-white/10 cursor-pointer transition"
+              className="flex items-center gap-1 sm:gap-1.5 text-[11px] font-medium text-gray-300 bg-[#0d1629] hover:bg-[#111e33] px-2.5 sm:px-3 py-1.5 rounded-full border border-white/10 cursor-pointer transition"
             >
               <Globe className="w-3.5 h-3.5 text-cyan-400" />
-              <span>{selectedLang.flag} {selectedLang.name}</span>
+              <span>{selectedLang.flag} <span className="hidden sm:inline">{selectedLang.name}</span></span>
               <ChevronDown className="w-3 h-3 text-gray-400" />
             </button>
 
@@ -180,20 +155,6 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
               </div>
             )}
           </div>
-
-          {/* Dark / Light mode toggle */}
-          <button
-            onClick={toggleTheme}
-            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            aria-label="Toggle dark/light theme"
-            className="w-8 h-8 rounded-full bg-[#0d1629] border border-white/10 flex items-center justify-center text-gray-300 hover:text-white hover:scale-105 transition cursor-pointer"
-          >
-            {theme === 'dark' ? (
-              <Moon className="w-3.5 h-3.5 text-blue-300" />
-            ) : (
-              <Sun className="w-3.5 h-3.5 text-amber-400" />
-            )}
-          </button>
 
           {/* Admin link */}
           <Link

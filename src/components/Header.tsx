@@ -118,7 +118,7 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
           <img
             src={theme === 'light' ? '/pngphoto.png' : '/logo2.png'}
             alt={settings.storeName || 'IMOSTRADA DIGITAL PRODUCTS'}
-            className="h-10 sm:h-12 w-auto object-contain transition-transform group-hover:scale-105"
+            className="h-5 sm:h-6 w-auto object-contain transition-transform group-hover:scale-105"
           />
         </Link>
 

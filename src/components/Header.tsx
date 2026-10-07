@@ -122,11 +122,11 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
           />
         </Link>
 
-        {/* CENTER: Marketplace Partner Store Logos (GAMIVO, G2A, Driffle using img1, img2, img3) */}
-        <div className="hidden md:flex items-center gap-6">
-          <img src="/img2.png" alt="GAMIVO" className="h-6 sm:h-7 w-auto object-contain" />
-          <img src="/img1.png" alt="G2A" className="h-6 sm:h-7 w-auto object-contain" />
-          <img src="/img3.png" alt="Driffle" className="h-6 sm:h-7 w-auto object-contain brightness-200" />
+        {/* CENTER: Marketplace Partner Store Logos (GAMIVO, G2A, Driffle) */}
+        <div className="hidden md:flex items-center gap-6 lg:gap-8">
+          <img src="/img2.png" alt="GAMIVO" className="h-5 sm:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
+          <img src="/img1.png" alt="G2A" className="h-5 sm:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
+          <img src="/img3.png" alt="Driffle" className="h-5 sm:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
         </div>
 
         {/* RIGHT: Status + Language + Theme + Admin */}

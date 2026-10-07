@@ -126,11 +126,18 @@ html.light textarea {
 }
 
 /* Google Translate Full Page Translator Styles */
-.goog-te-banner-frame {
+.goog-te-banner-frame,
+.goog-te-balloon-frame,
+#goog-gt-tt,
+.goog-te-spinner-pos,
+.VIpgJd-Z44Wfd-aSp2ne-dir-ltr,
+.VIpgJd-Z44Wfd-Lg4e8c,
+.skiptranslate {
   display: none !important;
 }
 body {
   top: 0px !important;
+  position: static !important;
 }
 .goog-te-gadget {
   font-size: 0px !important;
@@ -149,5 +156,5 @@ body {
   outline: none !important;
 }
 #google_translate_element {
-  display: inline-block;
+  display: none !important;
 }

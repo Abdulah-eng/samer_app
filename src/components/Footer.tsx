@@ -92,11 +92,11 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTerms }) => {
 
         {/* Partner Logos Bar using img1, img2, img3 */}
         <div className="pt-6 border-t border-gray-800/60 flex flex-wrap justify-center items-center gap-6">
-          <img src="/img2.png" alt="GAMIVO" className="h-6 sm:h-7 w-auto object-contain" />
+          <img src="/img2.png" alt="GAMIVO" className="h-5 sm:h-6 w-auto object-contain opacity-80 hover:opacity-100 transition" />
           <span className="text-gray-700 font-bold">•</span>
-          <img src="/img1.png" alt="G2A" className="h-6 sm:h-7 w-auto object-contain" />
+          <img src="/img1.png" alt="G2A" className="h-5 sm:h-6 w-auto object-contain opacity-80 hover:opacity-100 transition" />
           <span className="text-gray-700 font-bold">•</span>
-          <img src="/img3.png" alt="Driffle" className="h-6 sm:h-7 w-auto object-contain brightness-200" />
+          <img src="/img3.png" alt="Driffle" className="h-5 sm:h-6 w-auto object-contain opacity-80 hover:opacity-100 transition" />
         </div>
 
         {/* Bottom Bar matching image.png */}

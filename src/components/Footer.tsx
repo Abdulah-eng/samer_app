@@ -91,12 +91,25 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTerms }) => {
         </div>
 
         {/* Partner Logos Bar matching image.png */}
-        <div className="pt-6 border-t border-gray-800/60 flex flex-wrap justify-center items-center gap-6">
-          <span className="text-lg font-black tracking-widest text-orange-500 opacity-90">GAMIVO</span>
+        <div className="pt-6 border-t border-gray-800/60 flex flex-wrap justify-center items-center gap-5">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#ff6b35]/10 border border-[#ff6b35]/30">
+            <div className="w-5 h-5 rounded bg-[#ff6b35] flex items-center justify-center font-black text-[10px] text-white">G</div>
+            <span className="text-xs font-black tracking-wider text-[#ff6b35]">GAMIVO</span>
+          </div>
+
           <span className="text-gray-700 font-bold">•</span>
-          <span className="text-lg font-black tracking-widest text-red-400 opacity-90">G2A</span>
+
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#e63329]/10 border border-[#e63329]/30">
+            <div className="w-5 h-5 rounded bg-[#e63329] flex items-center justify-center font-black italic text-[10px] text-white">G2</div>
+            <span className="text-xs font-black tracking-wider italic text-[#e63329]">G2A</span>
+          </div>
+
           <span className="text-gray-700 font-bold">•</span>
-          <span className="text-lg font-black tracking-widest text-purple-400 opacity-90">Driffle</span>
+
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#a855f7]/10 border border-[#a855f7]/30">
+            <div className="w-5 h-5 rounded-full bg-[#a855f7] flex items-center justify-center font-bold text-[10px] text-white">D</div>
+            <span className="text-xs font-bold text-[#a855f7]">Driffle</span>
+          </div>
         </div>
 
         {/* Bottom Bar matching image.png */}

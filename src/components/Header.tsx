@@ -2,15 +2,27 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Globe, Moon, Sun, ShieldCheck } from 'lucide-react';
+import { Globe, Moon, Sun, ShieldCheck, ChevronDown, Check } from 'lucide-react';
 import { StoreSettings } from '@/lib/types';
 
 interface HeaderProps {
   settings: StoreSettings;
 }
 
+const LANGUAGES = [
+  { code: 'en', name: 'English', flag: '🇬🇧' },
+  { code: 'es', name: 'Español', flag: '🇪🇸' },
+  { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
+  { code: 'fr', name: 'Français', flag: '🇫🇷' },
+  { code: 'tr', name: 'Türkçe', flag: '🇹🇷' },
+  { code: 'ar', name: 'العربية', flag: '🇸🇦' },
+  { code: 'it', name: 'Italiano', flag: '🇮🇹' },
+];
+
 export const Header: React.FC<HeaderProps> = ({ settings }) => {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [selectedLang, setSelectedLang] = useState(LANGUAGES[0]);
+  const [isLangOpen, setIsLangOpen] = useState(false);
 
   useEffect(() => {
     // Check initial theme from localStorage or document class
@@ -27,6 +39,27 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
     } else {
       document.documentElement.classList.add('dark');
     }
+
+    // Initialize Google Translate Script dynamically if needed
+    if (!document.getElementById('google-translate-script')) {
+      const script = document.createElement('script');
+      script.id = 'google-translate-script';
+      script.src = '//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+      script.async = true;
+      document.body.appendChild(script);
+
+      (window as any).googleTranslateElementInit = () => {
+        new (window as any).google.translate.TranslateElement(
+          {
+            pageLanguage: 'en',
+            includedLanguages: 'en,es,de,fr,tr,ar,it',
+            layout: (window as any).google.translate.TranslateElement.InlineLayout.SIMPLE,
+            autoDisplay: false,
+          },
+          'google_translate_element'
+        );
+      };
+    }
   }, []);
 
   const toggleTheme = () => {
@@ -42,8 +75,23 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
     }
   };
 
+  const changeLanguage = (lang: (typeof LANGUAGES)[0]) => {
+    setSelectedLang(lang);
+    setIsLangOpen(false);
+
+    // Trigger Google Translate cookie / select element
+    const translateCombo = document.querySelector('.goog-te-combo') as HTMLSelectElement;
+    if (translateCombo) {
+      translateCombo.value = lang.code;
+      translateCombo.dispatchEvent(new Event('change'));
+    }
+  };
+
   return (
     <header className="w-full bg-[#080e1c]/95 backdrop-blur-md border-b border-white/[0.06] sticky top-0 z-50">
+      {/* Hidden container for Google Translate widget */}
+      <div id="google_translate_element" className="hidden" />
+
       <div className="max-w-7xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between gap-4">
 
         {/* LEFT: Shop Logo Image */}
@@ -55,23 +103,30 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
           />
         </Link>
 
-        {/* CENTER: Marketplace partner badges */}
-        <div className="hidden md:flex items-center gap-6">
-          <span className="text-sm font-black tracking-wider" style={{ color: '#ff6b35' }}>
-            GAMIVO
-          </span>
-
-          <span className="text-base font-black tracking-wide italic" style={{ color: '#e63329' }}>
-            G2A
-          </span>
-
-          <div className="flex items-center gap-1.5">
-            <div className="w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center">
-              <div className="w-2 h-2 rounded-full bg-white" />
+        {/* CENTER: Marketplace Partner Store Logos (GAMIVO, G2A, Driffle) */}
+        <div className="hidden md:flex items-center gap-4">
+          {/* GAMIVO Store Photo Logo Badge */}
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#ff6b35]/10 border border-[#ff6b35]/30 shadow-sm">
+            <div className="w-5 h-5 rounded bg-[#ff6b35] flex items-center justify-center font-black text-[10px] text-white">
+              G
             </div>
-            <span className="text-sm font-bold" style={{ color: '#a855f7' }}>
-              Driffle
-            </span>
+            <span className="text-xs font-black tracking-wider text-[#ff6b35]">GAMIVO</span>
+          </div>
+
+          {/* G2A Store Photo Logo Badge */}
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#e63329]/10 border border-[#e63329]/30 shadow-sm">
+            <div className="w-5 h-5 rounded bg-[#e63329] flex items-center justify-center font-black italic text-[10px] text-white">
+              G2
+            </div>
+            <span className="text-xs font-black tracking-wider italic text-[#e63329]">G2A</span>
+          </div>
+
+          {/* Driffle Store Photo Logo Badge */}
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#a855f7]/10 border border-[#a855f7]/30 shadow-sm">
+            <div className="w-5 h-5 rounded-full bg-[#a855f7] flex items-center justify-center font-bold text-[10px] text-white">
+              D
+            </div>
+            <span className="text-xs font-bold text-[#a855f7]">Driffle</span>
           </div>
         </div>
 
@@ -95,11 +150,36 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
             </span>
           </div>
 
-          {/* Language dropdown */}
-          <div className="hidden sm:flex items-center gap-1 text-[11px] text-gray-400 bg-[#0d1629] hover:bg-[#111e33] px-3 py-1.5 rounded-full border border-white/10 cursor-pointer transition">
-            <Globe className="w-3.5 h-3.5" />
-            <span>English</span>
-            <span className="text-[10px]">▾</span>
+          {/* Language Translator Dropdown */}
+          <div className="relative hidden sm:block">
+            <button
+              onClick={() => setIsLangOpen(!isLangOpen)}
+              className="flex items-center gap-1.5 text-[11px] font-medium text-gray-300 bg-[#0d1629] hover:bg-[#111e33] px-3 py-1.5 rounded-full border border-white/10 cursor-pointer transition"
+            >
+              <Globe className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{selectedLang.flag} {selectedLang.name}</span>
+              <ChevronDown className="w-3 h-3 text-gray-400" />
+            </button>
+
+            {isLangOpen && (
+              <div className="absolute right-0 mt-2 w-40 bg-[#0d1629] border border-gray-700 rounded-xl shadow-2xl py-1 z-50 text-xs text-gray-200">
+                {LANGUAGES.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => changeLanguage(lang)}
+                    className="w-full px-3 py-2 text-left hover:bg-gray-800 flex items-center justify-between transition cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span>{lang.flag}</span>
+                      <span>{lang.name}</span>
+                    </span>
+                    {selectedLang.code === lang.code && (
+                      <Check className="w-3.5 h-3.5 text-cyan-400" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Dark / Light mode toggle */}

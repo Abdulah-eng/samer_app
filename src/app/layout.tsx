@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
+import { LiveChatWidget } from '@/components/LiveChatWidget';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -13,16 +14,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Digital Delivery Portal - Redeem Code & Order Status',
+  title: 'IMOSTRADA Digital Products Delivery Portal',
   description:
-    'Custom digital product delivery website for Kinguin and GAMIVO merchants. Redeem your unique code and track account delivery.',
+    'Custom digital product delivery website for Kinguin, G2A, Driffle and GAMIVO merchants. Redeem your unique code and track account/key delivery.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}>
-      <body className="min-h-full flex flex-col bg-gray-950 text-gray-100 selection:bg-cyan-500 selection:text-black">
+      <body className="min-h-full flex flex-col bg-gray-950 text-gray-100 selection:bg-amber-400 selection:text-black">
         {children}
+        <LiveChatWidget />
       </body>
     </html>
   );

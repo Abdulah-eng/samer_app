@@ -158,7 +158,7 @@ export default function HomePage() {
                 Redeem Your Code
               </h1>
               <h1 className="text-4xl sm:text-5xl lg:text-[52px] font-black leading-[1.1] tracking-tight text-amber-400">
-                Get Your Account
+                Get Your Account / Key
               </h1>
             </div>
 

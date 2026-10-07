@@ -343,7 +343,7 @@ function OrderStatusContent() {
                       <span>Important Note:</span>
                     </div>
                     <p className="text-amber-200/90 pl-6 leading-relaxed">
-                      Add this 2FA key to <strong>Google Authenticator</strong> or any authenticator app.
+                      Add this 2FA key to <strong>Google Authenticator</strong> or any authenticator app or use this website:
                     </p>
                     <div className="pl-6 pt-1">
                       <a

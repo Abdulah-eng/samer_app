@@ -32,7 +32,7 @@ const HOME_FAQS = [
   {
     icon: Truck,
     q: 'HOW WE DELIVER ACCOUNTS',
-    a: 'Once your redeem code is verified, our fulfillment team manually prepares your account details (Email, Password & Instructions). Delivery usually completes within 15–30 minutes.',
+    a: 'Once your redeem code is verified, our fulfillment team manually prepares your product details (Email, Password, Key & Instructions). Delivery usually completes within 1 hour to 24 hours.',
   },
   {
     icon: KeyRound,
@@ -67,7 +67,7 @@ export default function HomePage() {
     storeName: 'IMOSTRADA',
     merchantName: 'imostrada',
     isOnline: true,
-    noticeText: 'Delivery time starts after the redeem request is submitted. Accounts are typically delivered within 5–30 minutes.',
+    noticeText: 'Delivery time starts after the redeem request is submitted. Products are typically delivered within 1 hour to 24 hours.',
   });
 
   const [code, setCode] = useState('');
@@ -175,7 +175,7 @@ export default function HomePage() {
                 </div>
                 <div>
                   <div className="text-xs font-bold text-white">Fast Delivery</div>
-                  <div className="text-[11px] text-gray-400">Usually 5–30 minutes</div>
+                  <div className="text-[11px] text-gray-400">Usually 1h – 24h</div>
                 </div>
               </div>
 
@@ -388,7 +388,7 @@ export default function HomePage() {
             <div>
               <h3 className="text-base font-bold text-white mb-1.5">Quick Delivery</h3>
               <p className="text-sm text-gray-400 leading-relaxed">
-                Most orders are delivered within 5–30 minutes.
+                Most orders are delivered within 1 hour to 24 hours.
               </p>
             </div>
           </div>

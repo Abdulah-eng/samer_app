@@ -71,11 +71,11 @@ export default function AdminPage() {
   const [codes, setCodes] = useState<RedeemCode[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [settings, setSettings] = useState<StoreSettings>({
-    storeName: 'TURKEPINSTORE',
-    merchantName: 'turkepinstore',
+    storeName: 'IMOSTRADA',
+    merchantName: 'imostrada',
     isOnline: true,
     noticeText:
-      'Delivery time starts after the redeem request is submitted. Non-subscription accounts are typically delivered within 15-30 minutes.',
+      'Delivery time starts after the redeem request is submitted. Products are typically delivered within 1 hour to 24 hours.',
   });
 
   const [loading, setLoading] = useState(false);

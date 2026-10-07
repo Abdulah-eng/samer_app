@@ -35,7 +35,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onClose }) => {
               <strong>One-Time Code Usage:</strong> Each redeem code is unique and can only be submitted once. Upon submission, the code status updates to processing.
             </li>
             <li>
-              <strong>Account Preparation:</strong> Digital accounts, subscriptions, and game credentials are manually prepared by our fulfillment team. Standard delivery duration is 15-30 minutes during online hours.
+              <strong>Account Preparation:</strong> Digital accounts, subscriptions, and game credentials are manually prepared by our fulfillment team. Standard delivery duration is 1 hour to 24 hours.
             </li>
             <li>
               <strong>Security & Access:</strong> Once completed credentials are provided, customer is responsible for following provided setup instructions.

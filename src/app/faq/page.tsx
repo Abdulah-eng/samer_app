@@ -15,7 +15,7 @@ const FAQS = [
   },
   {
     q: 'How long does account delivery take after redeeming?',
-    a: 'Non-subscription digital accounts are usually prepared and delivered within 15 to 30 minutes during merchant online hours. During peak times, it may take up to 1-2 hours.',
+    a: 'Digital accounts and keys are usually prepared and delivered within 1 hour to 24 hours during merchant online hours.',
   },
   {
     q: 'Why does my status say "Order is being processed"?',
@@ -33,11 +33,11 @@ const FAQS = [
 
 export default function FAQPage() {
   const [settings, setSettings] = useState<StoreSettings>({
-    storeName: 'TURKEPINSTORE',
-    merchantName: 'turkepinstore',
+    storeName: 'IMOSTRADA',
+    merchantName: 'imostrada',
     isOnline: true,
     noticeText:
-      'Delivery time starts after the redeem request is submitted. Non-subscription accounts are typically delivered within 15-30 minutes.',
+      'Delivery time starts after the redeem request is submitted. Products are typically delivered within 1 hour to 24 hours.',
   });
 
   const [openIndex, setOpenIndex] = useState<number | null>(0);

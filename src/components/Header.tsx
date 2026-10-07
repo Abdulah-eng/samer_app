@@ -93,15 +93,15 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
           <img
             src="/logo2.png"
             alt={settings.storeName || 'IMOSTRADA DIGITAL PRODUCTS'}
-            className="h-4.5 sm:h-6 w-auto object-contain transition-transform group-hover:scale-105"
+            className="h-6 sm:h-7 w-auto object-contain transition-transform group-hover:scale-105"
           />
         </Link>
 
-        {/* CENTER: Marketplace Partner Store Logos (GAMIVO, G2A, Driffle) - Mobile Responsive */}
-        <div className="flex items-center gap-2 sm:gap-6 lg:gap-8">
-          <img src="/img2.png" alt="GAMIVO" className="h-3.5 sm:h-5 md:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
-          <img src="/img1.png" alt="G2A" className="h-3.5 sm:h-5 md:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
-          <img src="/img3.png" alt="Driffle" className="h-3.5 sm:h-5 md:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
+        {/* CENTER: Marketplace Partner Store Logos (GAMIVO, G2A, Driffle) - Hidden on mobile, visible on desktop */}
+        <div className="hidden md:flex items-center gap-6 lg:gap-8">
+          <img src="/img2.png" alt="GAMIVO" className="h-5 sm:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
+          <img src="/img1.png" alt="G2A" className="h-5 sm:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
+          <img src="/img3.png" alt="Driffle" className="h-5 sm:h-6 w-auto object-contain opacity-90 hover:opacity-100 transition" />
         </div>
 
         {/* RIGHT: Status + Language + Admin */}

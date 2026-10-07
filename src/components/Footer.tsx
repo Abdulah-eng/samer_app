@@ -90,26 +90,13 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTerms }) => {
           </div>
         </div>
 
-        {/* Partner Logos Bar matching image.png */}
-        <div className="pt-6 border-t border-gray-800/60 flex flex-wrap justify-center items-center gap-5">
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#ff6b35]/10 border border-[#ff6b35]/30">
-            <div className="w-5 h-5 rounded bg-[#ff6b35] flex items-center justify-center font-black text-[10px] text-white">G</div>
-            <span className="text-xs font-black tracking-wider text-[#ff6b35]">GAMIVO</span>
-          </div>
-
+        {/* Partner Logos Bar using img1, img2, img3 */}
+        <div className="pt-6 border-t border-gray-800/60 flex flex-wrap justify-center items-center gap-6">
+          <img src="/img2.png" alt="GAMIVO" className="h-6 sm:h-7 w-auto object-contain" />
           <span className="text-gray-700 font-bold">•</span>
-
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#e63329]/10 border border-[#e63329]/30">
-            <div className="w-5 h-5 rounded bg-[#e63329] flex items-center justify-center font-black italic text-[10px] text-white">G2</div>
-            <span className="text-xs font-black tracking-wider italic text-[#e63329]">G2A</span>
-          </div>
-
+          <img src="/img1.png" alt="G2A" className="h-6 sm:h-7 w-auto object-contain" />
           <span className="text-gray-700 font-bold">•</span>
-
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#a855f7]/10 border border-[#a855f7]/30">
-            <div className="w-5 h-5 rounded-full bg-[#a855f7] flex items-center justify-center font-bold text-[10px] text-white">D</div>
-            <span className="text-xs font-bold text-[#a855f7]">Driffle</span>
-          </div>
+          <img src="/img3.png" alt="Driffle" className="h-6 sm:h-7 w-auto object-contain brightness-200" />
         </div>
 
         {/* Bottom Bar matching image.png */}

@@ -265,8 +265,24 @@ function OrderStatusContent() {
                     <Mail className="w-4 h-4 text-cyan-400" />
                     <span>ACCOUNT EMAIL</span>
                   </label>
-                  <div className="bg-[#0b1626] border border-gray-700/80 rounded-xl p-3.5 font-mono text-sm text-cyan-300 font-semibold select-all">
-                    {order.accountEmail || 'gamer.delivery.acc99@outlook'}
+                  <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-sm text-cyan-300 justify-between gap-2">
+                    <span className="select-all font-semibold">{order.accountEmail || 'gamer.delivery.acc99@outlook'}</span>
+                    <button
+                      onClick={() => order.accountEmail && copyToClipboard(order.accountEmail, 'email')}
+                      className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 shrink-0"
+                    >
+                      {copiedField === 'email' ? (
+                        <>
+                          <Check className="w-4 h-4 text-emerald-400" />
+                          <span className="text-emerald-400 font-bold">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
 
@@ -391,6 +407,22 @@ function OrderStatusContent() {
                     </>
                   )}
                 </button>
+
+                {/* 🎁 Thank You & Review Box */}
+                <div className="bg-gradient-to-r from-emerald-950/40 via-[#071424] to-cyan-950/40 border border-emerald-500/40 rounded-xl p-5 text-xs text-gray-200 space-y-2 shadow-lg">
+                  <div className="font-bold text-amber-400 text-sm">
+                    🎁 Thank You for Your Purchase! ❤️
+                  </div>
+                  <p className="text-gray-300 leading-relaxed font-medium">
+                    We truly appreciate your trust and support! 🙏
+                  </p>
+                  <p className="text-gray-300 leading-relaxed font-medium">
+                    If you are satisfied with your order, we would be very grateful if you could leave us a positive review ⭐ on the platform where you purchased from.
+                  </p>
+                  <p className="text-emerald-400 font-bold leading-relaxed pt-1">
+                    Your feedback means a lot to us and helps us grow and continue providing the best service! 💚
+                  </p>
+                </div>
               </div>
             )}
 
@@ -464,6 +496,22 @@ function OrderStatusContent() {
                     </>
                   )}
                 </button>
+
+                {/* 🎁 Thank You & Review Box */}
+                <div className="bg-gradient-to-r from-emerald-950/40 via-[#071424] to-cyan-950/40 border border-emerald-500/40 rounded-xl p-5 text-xs text-gray-200 space-y-2 shadow-lg">
+                  <div className="font-bold text-amber-400 text-sm">
+                    🎁 Thank You for Your Purchase! ❤️
+                  </div>
+                  <p className="text-gray-300 leading-relaxed font-medium">
+                    We truly appreciate your trust and support! 🙏
+                  </p>
+                  <p className="text-gray-300 leading-relaxed font-medium">
+                    If you are satisfied with your order, we would be very grateful if you could leave us a positive review ⭐ on the platform where you purchased from.
+                  </p>
+                  <p className="text-emerald-400 font-bold leading-relaxed pt-1">
+                    Your feedback means a lot to us and helps us grow and continue providing the best service! 💚
+                  </p>
+                </div>
               </div>
             )}
           </div>

@@ -116,37 +116,17 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
         {/* LEFT: Shop Logo Image */}
         <Link href="/" className="flex items-center shrink-0 group py-1">
           <img
-            src={theme === 'light' ? '/logo1.png' : '/logo2.png'}
+            src={theme === 'light' ? '/pngphoto.png' : '/logo2.png'}
             alt={settings.storeName || 'IMOSTRADA DIGITAL PRODUCTS'}
             className="h-10 sm:h-12 w-auto object-contain transition-transform group-hover:scale-105"
           />
         </Link>
 
-        {/* CENTER: Marketplace Partner Store Logos (GAMIVO, G2A, Driffle) */}
-        <div className="hidden md:flex items-center gap-4">
-          {/* GAMIVO Store Photo Logo Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#ff6b35]/10 border border-[#ff6b35]/30 shadow-sm">
-            <div className="w-5 h-5 rounded bg-[#ff6b35] flex items-center justify-center font-black text-[10px] text-white">
-              G
-            </div>
-            <span className="text-xs font-black tracking-wider text-[#ff6b35]">GAMIVO</span>
-          </div>
-
-          {/* G2A Store Photo Logo Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#e63329]/10 border border-[#e63329]/30 shadow-sm">
-            <div className="w-5 h-5 rounded bg-[#e63329] flex items-center justify-center font-black italic text-[10px] text-white">
-              G2
-            </div>
-            <span className="text-xs font-black tracking-wider italic text-[#e63329]">G2A</span>
-          </div>
-
-          {/* Driffle Store Photo Logo Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#a855f7]/10 border border-[#a855f7]/30 shadow-sm">
-            <div className="w-5 h-5 rounded-full bg-[#a855f7] flex items-center justify-center font-bold text-[10px] text-white">
-              D
-            </div>
-            <span className="text-xs font-bold text-[#a855f7]">Driffle</span>
-          </div>
+        {/* CENTER: Marketplace Partner Store Logos (GAMIVO, G2A, Driffle using img1, img2, img3) */}
+        <div className="hidden md:flex items-center gap-6">
+          <img src="/img2.png" alt="GAMIVO" className="h-6 sm:h-7 w-auto object-contain" />
+          <img src="/img1.png" alt="G2A" className="h-6 sm:h-7 w-auto object-contain" />
+          <img src="/img3.png" alt="Driffle" className="h-6 sm:h-7 w-auto object-contain brightness-200" />
         </div>
 
         {/* RIGHT: Status + Language + Theme + Admin */}

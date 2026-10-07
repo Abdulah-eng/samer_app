@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Globe, Moon, Sun, ShieldCheck, ShoppingCart } from 'lucide-react';
+import { Globe, Moon, Sun, ShieldCheck } from 'lucide-react';
 import { StoreSettings } from '@/lib/types';
 
 interface HeaderProps {
@@ -46,22 +46,13 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
     <header className="w-full bg-[#080e1c]/95 backdrop-blur-md border-b border-white/[0.06] sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-5 sm:px-8 h-14 flex items-center justify-between gap-4">
 
-        {/* LEFT: Logo */}
-        <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition"
-            style={{ background: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)' }}
-          >
-            <ShoppingCart className="w-4 h-4 text-white" strokeWidth={2.5} />
-          </div>
-          <div className="flex flex-col leading-none">
-            <span className="text-sm font-black tracking-widest text-white uppercase">
-              {(settings.storeName || 'IMOSTRADA').toUpperCase()}
-            </span>
-            <span className="text-[8px] font-bold text-cyan-400 tracking-widest uppercase mt-0.5">
-              DIGITAL PRODUCTS
-            </span>
-          </div>
+        {/* LEFT: Shop Logo Image */}
+        <Link href="/" className="flex items-center shrink-0 group">
+          <img
+            src={theme === 'light' ? '/logo1.png' : '/logo2.png'}
+            alt={settings.storeName || 'IMOSTRADA DIGITAL PRODUCTS'}
+            className="h-8 sm:h-9 w-auto object-contain transition-transform group-hover:scale-105"
+          />
         </Link>
 
         {/* CENTER: Marketplace partner badges */}

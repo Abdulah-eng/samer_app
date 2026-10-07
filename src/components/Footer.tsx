@@ -22,19 +22,13 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTerms }) => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Col 1: Brand */}
           <div className="space-y-3 md:col-span-2">
-            <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-                <ShoppingCart className="w-4 h-4 text-white" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-base font-black tracking-wider text-white uppercase leading-none">
-                  IMOSTRADA
-                </span>
-                <span className="text-[8px] font-bold text-cyan-400 tracking-widest uppercase mt-0.5">
-                  DIGITAL PRODUCTS
-                </span>
-              </div>
-            </div>
+            <Link href="/" className="flex items-center shrink-0 group">
+              <img
+                src="/logo2.png"
+                alt="IMOSTRADA DIGITAL PRODUCTS"
+                className="h-9 w-auto object-contain transition-transform group-hover:scale-105"
+              />
+            </Link>
             <p className="text-xs text-gray-400 max-w-sm">
               Your trusted source for digital products. Fast, safe, and automated delivery portal.
             </p>

@@ -26,6 +26,9 @@ import {
   RotateCcw,
   Wrench,
   XCircle,
+  ShoppingCart,
+  Settings,
+  ChevronRight,
 } from 'lucide-react';
 
 const HOME_FAQS = [
@@ -365,93 +368,98 @@ export default function HomePage() {
           HOW IT WORKS 4-STEP TIMELINE — matching user screenshot
       ───────────────────────────────────────────────── */}
       <section className="py-10 px-5 sm:px-8 bg-[#060a12] border-b border-gray-800/60">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto bg-[#09111d] border border-gray-800/80 rounded-2xl p-5 sm:p-7 shadow-2xl">
           {/* Header row */}
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-800/60">
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
               How It Works
             </h2>
             <button
               onClick={() => router.push('/faq')}
-              className="text-xs sm:text-sm font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition"
+              className="text-xs sm:text-sm font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition cursor-pointer"
             >
               <span>Learn more</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
 
-          {/* 4 Steps Container */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative">
-            {/* Step 1 */}
-            <div className="bg-[#09111d] border border-gray-800 rounded-2xl p-6 flex flex-col gap-4 relative">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full border-2 border-orange-500 bg-orange-500/10 text-orange-400 font-bold flex items-center justify-center text-sm shrink-0">
-                  1
+          {/* Single-line 4-Step Horizontal Row */}
+          <div className="overflow-x-auto custom-scrollbar pb-2">
+            <div className="flex items-start justify-between min-w-[680px] lg:min-w-0 gap-3 sm:gap-6">
+              
+              {/* Step 1 */}
+              <div className="flex-1 flex flex-col gap-3.5 relative">
+                <div className="flex items-center justify-between pr-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-full border-2 border-orange-500 bg-orange-500/10 text-orange-400 font-black text-sm flex items-center justify-center shrink-0">
+                      1
+                    </div>
+                    <ShoppingCart className="w-6 h-6 text-white stroke-[2.2]" />
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-600 shrink-0" />
                 </div>
-                <div className="w-9 h-9 rounded-xl bg-gray-800/80 border border-gray-700 flex items-center justify-center text-gray-200">
-                  <Package className="w-5 h-5 text-orange-400" />
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-white mb-1">Get Your Code</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed max-w-[170px]">
+                    Purchase from GAMIVO, G2A or Driffle and receive a code.
+                  </p>
                 </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-white mb-1">Get Your Code</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Purchase from GAMIVO, G2A or Driffle and receive a code.
-                </p>
-              </div>
-            </div>
 
-            {/* Step 2 */}
-            <div className="bg-[#09111d] border border-gray-800 rounded-2xl p-6 flex flex-col gap-4 relative">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full border-2 border-blue-500 bg-blue-500/10 text-blue-400 font-bold flex items-center justify-center text-sm shrink-0">
-                  2
+              {/* Step 2 */}
+              <div className="flex-1 flex flex-col gap-3.5 relative">
+                <div className="flex items-center justify-between pr-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-full border-2 border-blue-500 bg-blue-500/10 text-blue-400 font-black text-sm flex items-center justify-center shrink-0">
+                      2
+                    </div>
+                    <KeyRound className="w-6 h-6 text-blue-400 stroke-[2.2]" />
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-600 shrink-0" />
                 </div>
-                <div className="w-9 h-9 rounded-xl bg-gray-800/80 border border-gray-700 flex items-center justify-center text-gray-200">
-                  <KeyRound className="w-5 h-5 text-blue-400" />
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-white mb-1">Redeem Code</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed max-w-[170px]">
+                    Enter your code on our website to create your order.
+                  </p>
                 </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-white mb-1">Redeem Code</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Enter your code on our website to create your order.
-                </p>
-              </div>
-            </div>
 
-            {/* Step 3 */}
-            <div className="bg-[#09111d] border border-gray-800 rounded-2xl p-6 flex flex-col gap-4 relative">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full border-2 border-purple-500 bg-purple-500/10 text-purple-400 font-bold flex items-center justify-center text-sm shrink-0">
-                  3
+              {/* Step 3 */}
+              <div className="flex-1 flex flex-col gap-3.5 relative">
+                <div className="flex items-center justify-between pr-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-full border-2 border-purple-500 bg-purple-500/10 text-purple-400 font-black text-sm flex items-center justify-center shrink-0">
+                      3
+                    </div>
+                    <Settings className="w-6 h-6 text-white stroke-[2.2]" />
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-600 shrink-0" />
                 </div>
-                <div className="w-9 h-9 rounded-xl bg-gray-800/80 border border-gray-700 flex items-center justify-center text-gray-200">
-                  <Clock className="w-5 h-5 text-purple-400" />
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-white mb-1">Processing</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed max-w-[170px]">
+                    Your order is being prepared. Usually 1 hour to 24 hours.
+                  </p>
                 </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-white mb-1">Processing</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Your order is being prepared. Usually 1 hour to 24 hours.
-                </p>
-              </div>
-            </div>
 
-            {/* Step 4 */}
-            <div className="bg-[#09111d] border border-gray-800 rounded-2xl p-6 flex flex-col gap-4 relative">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full border-2 border-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold flex items-center justify-center text-sm shrink-0">
-                  4
+              {/* Step 4 */}
+              <div className="flex-1 flex flex-col gap-3.5 relative">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-full border-2 border-emerald-500 bg-emerald-500/10 text-emerald-400 font-black text-sm flex items-center justify-center shrink-0">
+                    4
+                  </div>
+                  <CheckCircle2 className="w-6 h-6 text-emerald-400 stroke-[2.2]" />
                 </div>
-                <div className="w-9 h-9 rounded-xl bg-gray-800/80 border border-gray-700 flex items-center justify-center text-gray-200">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-white mb-1">Get Your Account / Key</h3>
+                  <p className="text-xs text-gray-400 leading-relaxed max-w-[170px]">
+                    Check your order status and view your account or key details.
+                  </p>
                 </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-white mb-1">Get Your Account / Key</h3>
-                <p className="text-xs text-gray-400 leading-relaxed">
-                  Check your order status and view your account or key details.
-                </p>
-              </div>
+
             </div>
           </div>
         </div>

@@ -28,7 +28,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({ isOpen, onClose }) => {
 
         <div className="space-y-4 text-xs sm:text-sm text-gray-300 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
           <p>
-            Welcome to our Digital Product Delivery Portal. By entering your GAMIVO / Kinguin redeem code and submitting a delivery request, you agree to the following terms:
+            Welcome to our Digital Product Delivery Portal. By entering your GAMIVO, G2A or Driffle redeem code and submitting a delivery request, you agree to the following terms:
           </p>
           <ol className="list-decimal pl-5 space-y-2">
             <li>

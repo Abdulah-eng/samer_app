@@ -1,4 +1,4 @@
-import { Product, RedeemCode, Order, StoreSettings, OrderStatus, DeliveryType } from './types';
+import { Product, RedeemCode, Order, StoreSettings, OrderStatus, DeliveryType, ChatMessage } from './types';
 import { supabase, isSupabaseConfigured } from './supabase';
 
 const STORAGE_KEYS = {
@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   REDEEM_CODES: 'delivery_portal_codes',
   ORDERS: 'delivery_portal_orders',
   SETTINGS: 'delivery_portal_settings',
+  CHAT_MESSAGES: 'delivery_portal_chat_messages',
 };
 
 // Initial Seed Data for offline fallback mode
@@ -15,6 +16,7 @@ const INITIAL_PRODUCTS: Product[] = [
     name: 'Xbox Game Pass Ultimate 12 Months Account',
     category: 'Subscription',
     description: 'Xbox Live & Game Pass Ultimate account access',
+    defaultDeliveryType: 'account',
     createdAt: '2026-10-01T00:00:00.000Z',
   },
   {
@@ -22,13 +24,15 @@ const INITIAL_PRODUCTS: Product[] = [
     name: 'PlayStation Plus Deluxe 1 Year Key',
     category: 'Game Key',
     description: 'PSN Deluxe 12-month membership key',
+    defaultDeliveryType: 'key',
     createdAt: '2026-10-01T00:00:00.000Z',
   },
   {
     id: 'prod-3',
-    name: 'Grand Theft Auto V Premium Edition Key',
-    category: 'Game Key',
-    description: 'Steam Activation Key for GTA V',
+    name: 'Fortnite 800 V-Bucks Top Up',
+    category: 'Top-Up Service',
+    description: 'Direct In-Game Top-Up for Fortnite (Xbox/PlayStation/PC)',
+    defaultDeliveryType: 'topup',
     createdAt: '2026-10-01T00:00:00.000Z',
   },
 ];
@@ -39,6 +43,7 @@ const INITIAL_CODES: RedeemCode[] = [
     code: 'GAMIVO-XBOX-9981',
     productId: 'prod-1',
     productName: 'Xbox Game Pass Ultimate 12 Months Account',
+    deliveryType: 'account',
     status: 'unused',
     createdAt: '2026-10-01T00:00:00.000Z',
   },
@@ -47,69 +52,22 @@ const INITIAL_CODES: RedeemCode[] = [
     code: 'GAMIVO-PSN-4412',
     productId: 'prod-2',
     productName: 'PlayStation Plus Deluxe 1 Year Key',
+    deliveryType: 'key',
     status: 'unused',
     createdAt: '2026-10-01T00:00:00.000Z',
   },
   {
     id: 'code-3',
-    code: 'GAMIVO-GTA-8823',
+    code: 'GAMIVO-VBUCKS-8823',
     productId: 'prod-3',
-    productName: 'Grand Theft Auto V Premium Edition Key',
+    productName: 'Fortnite 800 V-Bucks Top Up',
+    deliveryType: 'topup',
     status: 'unused',
     createdAt: '2026-10-01T00:00:00.000Z',
   },
-  {
-    id: 'code-4',
-    code: 'KINGUIN-DEMO-0001',
-    productId: 'prod-1',
-    productName: 'Xbox Game Pass Ultimate 12 Months Account',
-    status: 'completed',
-    createdAt: '2026-10-01T00:00:00.000Z',
-    usedAt: '2026-10-01T01:00:00.000Z',
-  },
-  {
-    id: 'code-5',
-    code: 'KINGUIN-DEMO-0002',
-    productId: 'prod-2',
-    productName: 'PlayStation Plus Deluxe 1 Year Key',
-    status: 'completed',
-    createdAt: '2026-10-01T00:00:00.000Z',
-    usedAt: '2026-10-01T02:00:00.000Z',
-  },
 ];
 
-const INITIAL_ORDERS: Order[] = [
-  {
-    id: 'ord-1001',
-    orderNumber: 'ORD-98241',
-    code: 'KINGUIN-DEMO-0001',
-    productId: 'prod-1',
-    productName: 'Xbox Game Pass Ultimate 12 Months Account',
-    status: 'completed',
-    deliveryType: 'account',
-    accountEmail: 'gamer.delivery.acc99@outlook.com',
-    accountPassword: 'PassX99!2026',
-    twoFactorKey: 'JBSWY3DPEHPK3PXP',
-    instructions:
-      '1. Open Xbox app or console.\n2. Add new account using the email and password above.\n3. Add the 2FA key to Google Authenticator or any authenticator app (https://2fa.co.com/).\n4. Set as Home Xbox to share subscription features across all profiles.\n5. Enjoy gaming!',
-    createdAt: '2026-10-01T01:00:00.000Z',
-    updatedAt: '2026-10-01T01:15:00.000Z',
-  },
-  {
-    id: 'ord-1002',
-    orderNumber: 'ORD-98242',
-    code: 'KINGUIN-DEMO-0002',
-    productId: 'prod-2',
-    productName: 'PlayStation Plus Deluxe 1 Year Key',
-    status: 'completed',
-    deliveryType: 'key',
-    productKey: 'JBSWY3DPEHPK3PXP',
-    instructions:
-      'This is your product key. Redeem it on Xbox/Microsoft Store to activate your product.',
-    createdAt: '2026-10-01T02:00:00.000Z',
-    updatedAt: '2026-10-01T02:15:00.000Z',
-  },
-];
+const INITIAL_ORDERS: Order[] = [];
 
 const INITIAL_SETTINGS: StoreSettings = {
   storeName: 'IMOSTRADA',
@@ -117,6 +75,8 @@ const INITIAL_SETTINGS: StoreSettings = {
   isOnline: true,
   noticeText:
     'Delivery time starts after the redeem request is submitted. Products are delivered between 1 hour to 24 hours.',
+  whatsappNumber: '+1234567890',
+  telegramUsername: 'imostrada_support',
 };
 
 // Local storage helpers
@@ -223,16 +183,23 @@ export async function getRedeemCodes(): Promise<RedeemCode[]> {
   return getLocal<RedeemCode[]>(STORAGE_KEYS.REDEEM_CODES, INITIAL_CODES);
 }
 
-export async function addRedeemCode(codeStr: string, productId: string): Promise<RedeemCode> {
+export async function addRedeemCode(
+  codeStr: string,
+  productId: string,
+  deliveryType: DeliveryType = 'account'
+): Promise<RedeemCode> {
   const products = await getProducts();
   const product = products.find((p) => p.id === productId);
 
   const cleanCode = codeStr.trim().toUpperCase();
+  const resolvedDeliveryType = deliveryType || product?.defaultDeliveryType || 'account';
+
   const newCode: RedeemCode = {
     id: 'code-' + Math.random().toString(36).substring(2, 9),
     code: cleanCode,
     productId,
     productName: product?.name || 'Digital Product',
+    deliveryType: resolvedDeliveryType,
     status: 'unused',
     createdAt: new Date().toISOString(),
   };
@@ -243,6 +210,7 @@ export async function addRedeemCode(codeStr: string, productId: string): Promise
       .insert({
         code: cleanCode,
         product_id: productId,
+        delivery_type: resolvedDeliveryType,
         status: 'unused',
       })
       .select()
@@ -254,6 +222,7 @@ export async function addRedeemCode(codeStr: string, productId: string): Promise
         code: data.code,
         productId: data.product_id,
         productName: product?.name || 'Digital Product',
+        deliveryType: data.delivery_type || resolvedDeliveryType,
         status: data.status,
         createdAt: data.created_at,
       };
@@ -273,12 +242,15 @@ export async function addRedeemCode(codeStr: string, productId: string): Promise
 
 export async function bulkAddRedeemCodes(
   codesList: string[],
-  productId: string
+  productId: string,
+  deliveryType: DeliveryType = 'account'
 ): Promise<{ added: number; skipped: number }> {
   const products = await getProducts();
   const product = products.find((p) => p.id === productId);
   const existing = await getRedeemCodes();
   const existingSet = new Set(existing.map((c) => c.code.toUpperCase()));
+
+  const resolvedDeliveryType = deliveryType || product?.defaultDeliveryType || 'account';
 
   let added = 0;
   let skipped = 0;
@@ -298,6 +270,7 @@ export async function bulkAddRedeemCodes(
       code: clean,
       productId,
       productName: product?.name || 'Digital Product',
+      deliveryType: resolvedDeliveryType,
       status: 'unused',
       createdAt: new Date().toISOString(),
     });
@@ -307,6 +280,7 @@ export async function bulkAddRedeemCodes(
     const supabasePayload = newEntries.map((c) => ({
       code: c.code,
       product_id: productId,
+      delivery_type: resolvedDeliveryType,
       status: 'unused',
     }));
     await supabase.from('redeem_codes').insert(supabasePayload);
@@ -328,7 +302,12 @@ export async function deleteRedeemCode(id: string): Promise<boolean> {
 }
 
 // ---------------- ORDERS & REDEMPTION WORKFLOW ----------------
-export async function verifyAndRedeemCode(rawCode: string): Promise<{ success: boolean; message: string; order?: Order }> {
+export async function verifyAndRedeemCode(rawCode: string): Promise<{
+  success: boolean;
+  message: string;
+  isTopUp?: boolean;
+  order?: Order;
+}> {
   const cleanCode = rawCode.trim().toUpperCase();
   if (!cleanCode) {
     return { success: false, message: 'Please enter a valid redeem code.' };
@@ -341,7 +320,7 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{ success: b
   if (!foundCode) {
     return {
       success: false,
-      message: 'Invalid redeem code. Please check your GAMIVO/Kinguin key and try again.',
+      message: 'Invalid redeem code. Please check your GAMIVO, G2A or Driffle key and try again.',
     };
   }
 
@@ -352,6 +331,7 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{ success: b
       return {
         success: true,
         message: 'This redeem code was already activated. Redirecting to your order status...',
+        isTopUp: existingOrder.deliveryType === 'topup',
         order: existingOrder,
       };
     }
@@ -364,9 +344,20 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{ success: b
     };
   }
 
-  // Determine default delivery type based on product name/category
-  const isKeyType = foundCode.productName?.toLowerCase().includes('key') || foundCode.productName?.toLowerCase().includes('code');
-  const defaultDeliveryType: DeliveryType = isKeyType ? 'key' : 'account';
+  // Determine delivery type
+  let determinedDeliveryType: DeliveryType = foundCode.deliveryType || 'account';
+  const pName = (foundCode.productName || '').toLowerCase();
+  if (
+    pName.includes('top up') ||
+    pName.includes('top-up') ||
+    pName.includes('v-bucks') ||
+    pName.includes('coins') ||
+    pName.includes('points')
+  ) {
+    determinedDeliveryType = 'topup';
+  } else if (!foundCode.deliveryType && (pName.includes('key') || pName.includes('code'))) {
+    determinedDeliveryType = 'key';
+  }
 
   // Create new Order with status 'processing'
   const orderNumber = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
@@ -377,7 +368,7 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{ success: b
     productId: foundCode.productId,
     productName: foundCode.productName || 'Digital Product',
     status: 'processing',
-    deliveryType: defaultDeliveryType,
+    deliveryType: determinedDeliveryType,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -394,7 +385,7 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{ success: b
       product_id: foundCode.productId,
       product_name: newOrder.productName,
       status: 'processing',
-      delivery_type: defaultDeliveryType,
+      delivery_type: determinedDeliveryType,
     });
   }
 
@@ -407,8 +398,56 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{ success: b
   return {
     success: true,
     message: 'Redeem code verified! Your order has been placed and is currently being processed.',
+    isTopUp: determinedDeliveryType === 'topup',
     order: newOrder,
   };
+}
+
+// ---------------- TOP-UP SERVICE SUBMISSION ----------------
+export async function submitTopUpRequest(
+  orderId: string,
+  topUpData: {
+    topUpOrderNumber: string;
+    topUpPlatform: string;
+    topUpAccountEmail: string;
+    topUpAccountPassword?: string;
+    topUpNotes?: string;
+  }
+): Promise<Order> {
+  const orders = await getOrders();
+  const orderIndex = orders.findIndex((o) => o.id === orderId || o.code.toUpperCase() === orderId.toUpperCase());
+  if (orderIndex === -1) {
+    throw new Error('Order not found');
+  }
+
+  const existing = orders[orderIndex];
+  const updatedOrder: Order = {
+    ...existing,
+    ...topUpData,
+    status: 'processing',
+    topUpSubmittedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    await supabase
+      .from('orders')
+      .update({
+        top_up_order_number: topUpData.topUpOrderNumber,
+        top_up_platform: topUpData.topUpPlatform,
+        top_up_account_email: topUpData.topUpAccountEmail,
+        top_up_account_password: topUpData.topUpAccountPassword,
+        top_up_notes: topUpData.topUpNotes,
+        top_up_submitted_at: updatedOrder.topUpSubmittedAt,
+        status: 'processing',
+        updated_at: updatedOrder.updatedAt,
+      })
+      .eq('id', existing.id);
+  }
+
+  orders[orderIndex] = updatedOrder;
+  setLocal(STORAGE_KEYS.ORDERS, orders);
+  return updatedOrder;
 }
 
 export async function getOrders(): Promise<Order[]> {
@@ -427,6 +466,12 @@ export async function getOrders(): Promise<Order[]> {
         accountPassword: item.account_password,
         twoFactorKey: item.two_factor_key,
         productKey: item.product_key,
+        topUpOrderNumber: item.top_up_order_number,
+        topUpPlatform: item.top_up_platform,
+        topUpAccountEmail: item.top_up_account_email,
+        topUpAccountPassword: item.top_up_account_password,
+        topUpNotes: item.top_up_notes,
+        topUpSubmittedAt: item.top_up_submitted_at,
         instructions: item.instructions,
         customerIp: item.customer_ip,
         createdAt: item.created_at,
@@ -457,6 +502,11 @@ export async function updateOrderDelivery(
     accountPassword?: string;
     twoFactorKey?: string;
     productKey?: string;
+    topUpOrderNumber?: string;
+    topUpPlatform?: string;
+    topUpAccountEmail?: string;
+    topUpAccountPassword?: string;
+    topUpNotes?: string;
     instructions?: string;
     status: OrderStatus;
   }
@@ -497,6 +547,11 @@ export async function updateOrderDelivery(
         account_password: deliveryData.accountPassword,
         two_factor_key: deliveryData.twoFactorKey,
         product_key: deliveryData.productKey,
+        top_up_order_number: deliveryData.topUpOrderNumber,
+        top_up_platform: deliveryData.topUpPlatform,
+        top_up_account_email: deliveryData.topUpAccountEmail,
+        top_up_account_password: deliveryData.topUpAccountPassword,
+        top_up_notes: deliveryData.topUpNotes,
         instructions: deliveryData.instructions,
         status: deliveryData.status,
         updated_at: updatedOrder.updatedAt,
@@ -509,6 +564,62 @@ export async function updateOrderDelivery(
   return updatedOrder;
 }
 
+// ---------------- LIVE CHAT MESSAGES SERVICE ----------------
+export async function getChatMessages(): Promise<ChatMessage[]> {
+  if (isSupabaseConfigured && supabase) {
+    const { data } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
+    if (data && data.length > 0) {
+      return data.map((d: any) => ({
+        id: d.id,
+        sender: d.sender,
+        text: d.text,
+        orderNumber: d.order_number,
+        timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }));
+    }
+  }
+
+  return getLocal<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, [
+    {
+      id: 'msg-1',
+      sender: 'agent',
+      text: 'Hello! 👋 Welcome to IMOSTRADA Live Support. How can we help you with your redeem code, order or top-up today?',
+      timestamp: 'Just now',
+    },
+  ]);
+}
+
+export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>): Promise<ChatMessage> {
+  const newMsg: ChatMessage = {
+    id: 'msg-' + Date.now(),
+    ...msg,
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('chat_messages').insert({
+        sender: msg.sender,
+        text: msg.text,
+        order_number: msg.orderNumber,
+      });
+    } catch (e) {
+      console.warn('Supabase chat insert warning', e);
+    }
+  }
+
+  const existing = await getChatMessages();
+  const updated = [...existing, newMsg];
+  setLocal(STORAGE_KEYS.CHAT_MESSAGES, updated);
+
+  // Dispatch custom window event so customer widget and admin panel update instantly in same browser!
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('imostrada_chat_update', { detail: newMsg }));
+  }
+
+  return newMsg;
+}
+
 // ---------------- STORE SETTINGS SERVICE ----------------
 export async function getStoreSettings(): Promise<StoreSettings> {
   if (isSupabaseConfigured && supabase) {
@@ -519,6 +630,8 @@ export async function getStoreSettings(): Promise<StoreSettings> {
         merchantName: data.merchant_name,
         isOnline: data.is_online,
         noticeText: data.notice_text,
+        whatsappNumber: data.whatsapp_number,
+        telegramUsername: data.telegram_username,
       };
     }
   }

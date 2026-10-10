@@ -10,8 +10,8 @@ import { ChevronDown, HelpCircle, Shield, Clock, Key, Mail } from 'lucide-react'
 
 const FAQS = [
   {
-    q: 'How do I redeem my GAMIVO or Kinguin key?',
-    a: 'Simply visit the Home page of this delivery portal, enter your unique redeem code received from GAMIVO or Kinguin in the code box (formatted like XXXX-XXXX-XXXX), accept the terms, and click "Redeem Code".',
+    q: 'How do I redeem my GAMIVO, G2A or Driffle key?',
+    a: 'Simply visit the Home page of this delivery portal, enter your unique redeem code received from GAMIVO, G2A or Driffle in the code box (formatted like XXXX-XXXX-XXXX), accept the terms, and click "Redeem Code".',
   },
   {
     q: 'How long does account delivery take after redeeming?',
@@ -99,7 +99,7 @@ export default function FAQPage() {
           <Mail className="w-8 h-8 text-cyan-400 mx-auto" />
           <h3 className="text-base font-bold text-white">Still need help with your order?</h3>
           <p className="text-xs text-gray-400 max-w-md mx-auto">
-            Contact merchant support with your GAMIVO/Kinguin order reference or unique redeem code.
+            Contact merchant support with your GAMIVO, G2A or Driffle order reference or unique redeem code.
           </p>
         </div>
       </main>

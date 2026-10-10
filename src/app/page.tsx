@@ -104,7 +104,11 @@ export default function HomePage() {
       if (!result.success) {
         setErrorMsg(result.message);
       } else if (result.order) {
-        setRedeemedOrder(result.order);
+        if (result.isTopUp || result.order.deliveryType === 'topup') {
+          router.push(`/topup?code=${encodeURIComponent(result.order.code)}`);
+        } else {
+          setRedeemedOrder(result.order);
+        }
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'An error occurred.';
@@ -343,22 +347,6 @@ export default function HomePage() {
                   </button>
                 </div>
               )}
-
-              {/* Demo codes */}
-              <div className="mt-5 pt-4 border-t border-gray-800/80 text-center">
-                <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-2">Demo Codes:</p>
-                <div className="flex flex-wrap justify-center gap-1.5">
-                  {['GAMIVO-XBOX-9981', 'GAMIVO-PSN-4412', 'KINGUIN-DEMO-0001'].map((dc) => (
-                    <button
-                      key={dc}
-                      onClick={() => { setCode(dc); setAcceptedTerms(true); setErrorMsg(''); }}
-                      className="text-[10px] bg-[#07101e] hover:bg-gray-800 border border-gray-700 text-cyan-400 px-2 py-0.5 rounded font-mono transition"
-                    >
-                      {dc}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         </div>

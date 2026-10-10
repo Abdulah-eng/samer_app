@@ -2,25 +2,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, User, Bot, Circle, ExternalLink, Headphones } from 'lucide-react';
-
-interface ChatMessage {
-  id: string;
-  sender: 'user' | 'agent';
-  text: string;
-  timestamp: string;
-}
+import { getChatMessages, sendChatMessage } from '@/lib/store';
+import { ChatMessage } from '@/lib/types';
 
 export const LiveChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'msg-1',
-      sender: 'agent',
-      text: 'Hello! 👋 Welcome to IMOSTRADA Live Support. How can we help you with your redeem code or order today?',
-      timestamp: 'Just now',
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -29,36 +17,52 @@ export const LiveChatWidget: React.FC = () => {
   };
 
   useEffect(() => {
+    // Initial fetch
+    getChatMessages().then(setMessages);
+
+    // Event listener for chat updates from admin or user
+    const handleChatUpdate = () => {
+      getChatMessages().then(setMessages);
+    };
+
+    // Event listener to open chat from any button on page
+    const handleOpenChat = () => {
+      setIsOpen(true);
+    };
+
+    window.addEventListener('imostrada_chat_update', handleChatUpdate);
+    window.addEventListener('imostrada_open_chat', handleOpenChat);
+
+    return () => {
+      window.removeEventListener('imostrada_chat_update', handleChatUpdate);
+      window.removeEventListener('imostrada_open_chat', handleOpenChat);
+    };
+  }, []);
+
+  useEffect(() => {
     if (isOpen) {
       scrollToBottom();
     }
   }, [messages, isOpen]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanText = inputMessage.trim();
     if (!cleanText) return;
 
-    const userMsg: ChatMessage = {
-      id: 'user-' + Date.now(),
-      sender: 'user',
-      text: cleanText,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setMessages((prev) => [...prev, userMsg]);
     setInputMessage('');
 
-    // Simulated auto-reply from Live Support Agent
-    setTimeout(() => {
-      const agentMsg: ChatMessage = {
-        id: 'agent-' + Date.now(),
-        sender: 'agent',
-        text: 'Thank you for your message! Our fulfillment team has received your query. If you need instant support with an active order, please make sure to include your Redeem Code or Order # (e.g. ORD-98241).',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages((prev) => [...prev, agentMsg]);
-    }, 1000);
+    try {
+      await sendChatMessage({
+        sender: 'user',
+        text: cleanText,
+      });
+      // Refresh messages
+      const updated = await getChatMessages();
+      setMessages(updated);
+    } catch (err) {
+      console.error('Error sending chat message', err);
+    }
   };
 
   return (

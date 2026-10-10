@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { TermsModal } from '@/components/TermsModal';
@@ -23,9 +23,13 @@ import {
   FileText,
   Key,
   ExternalLink,
+  Coins,
+  MessageSquare,
+  ShoppingCart,
 } from 'lucide-react';
 
 function OrderStatusContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialCode = searchParams?.get('code') || '';
 
@@ -118,30 +122,6 @@ function OrderStatusContent() {
               {loading ? <RefreshCw className="w-4 h-4 animate-spin text-gray-950" /> : <span>Search Order</span>}
             </button>
           </form>
-
-          {/* Quick Shortcuts */}
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-[11px] text-gray-400">
-            <span>Try demo orders:</span>
-            <button
-              onClick={() => {
-                setSearchQuery('KINGUIN-DEMO-0001');
-                handleSearch('KINGUIN-DEMO-0001');
-              }}
-              className="text-emerald-400 hover:underline font-mono"
-            >
-              Account Demo (ORD-98241)
-            </button>
-            <span>•</span>
-            <button
-              onClick={() => {
-                setSearchQuery('KINGUIN-DEMO-0002');
-                handleSearch('KINGUIN-DEMO-0002');
-              }}
-              className="text-cyan-400 hover:underline font-mono"
-            >
-              Key Demo (ORD-98242)
-            </button>
-          </div>
         </div>
 
         {/* Search Results Display */}
@@ -197,8 +177,8 @@ function OrderStatusContent() {
               </div>
             </div>
 
-            {/* STATUS: PROCESSING SCREEN */}
-            {order.status === 'processing' && (
+            {/* STATUS: PROCESSING SCREEN (Account & Key Orders) */}
+            {order.status === 'processing' && order.deliveryType !== 'topup' && (
               <div className="bg-[#07101e] border border-amber-500/30 rounded-xl p-6 text-center space-y-4">
                 <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
                   <Clock className="w-8 h-8 animate-spin" />
@@ -247,7 +227,7 @@ function OrderStatusContent() {
             )}
 
             {/* STATUS: COMPLETED — OPTION 1: ACCOUNT DELIVERY (Screenshot 1) */}
-            {order.status === 'completed' && order.deliveryType !== 'key' && (
+            {order.status === 'completed' && (order.deliveryType === 'account' || !order.deliveryType) && (
               <div className="bg-[#07101e] border-2 border-emerald-500/50 rounded-2xl p-6 space-y-6 shadow-2xl relative overflow-hidden">
                 {/* Header matching Screenshot 1 */}
                 <div className="flex items-center justify-between border-b border-emerald-500/30 pb-4">
@@ -507,6 +487,171 @@ function OrderStatusContent() {
                   </p>
                   <p className="text-gray-300 leading-relaxed font-medium">
                     If you are satisfied with your order, we would be very grateful if you could leave us a positive review ⭐ on the platform where you purchased from.
+                  </p>
+                  <p className="text-emerald-400 font-bold leading-relaxed pt-1">
+                    Your feedback means a lot to us and helps us grow and continue providing the best service! 💚
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* STATUS: OPTION 3: TOP-UP SERVICE DELIVERY (Screenshot 2 workflow) */}
+            {order.deliveryType === 'topup' && (
+              <div className="bg-[#07101e] border-2 border-amber-500/50 rounded-2xl p-6 space-y-6 shadow-2xl relative overflow-hidden">
+                {/* Header matching Screenshot 2 style */}
+                <div className="flex items-center justify-between border-b border-amber-500/30 pb-4">
+                  <div className="flex items-center space-x-2">
+                    <Coins className="w-5 h-5 text-amber-400" />
+                    <h3 className="text-xl font-black tracking-wider text-amber-400 uppercase">
+                      TOP-UP REQUEST
+                    </h3>
+                  </div>
+                  <span
+                    className={`text-xs font-bold px-4 py-1 rounded-full uppercase tracking-wider border ${
+                      order.status === 'completed'
+                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                        : 'border-amber-500/40 bg-amber-500/10 text-amber-400 animate-pulse'
+                    }`}
+                  >
+                    {order.status === 'completed' ? 'Completed' : 'Processing'}
+                  </span>
+                </div>
+
+                {/* Submitted Top-Up Details Card */}
+                <div className="bg-[#09111d] border border-gray-800 rounded-xl p-5 space-y-3.5 text-xs">
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
+                    <span className="text-gray-400 font-semibold">Service Product:</span>
+                    <span className="font-bold text-white text-sm">{order.productName}</span>
+                  </div>
+
+                  {order.topUpOrderNumber && (
+                    <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
+                      <span className="text-gray-400 font-semibold">Order Number:</span>
+                      <span className="font-mono font-bold text-amber-400 text-sm">
+                        {order.topUpOrderNumber}
+                      </span>
+                    </div>
+                  )}
+
+                  {order.topUpPlatform && (
+                    <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
+                      <span className="text-gray-400 font-semibold">Platform Purchased From:</span>
+                      <span className="font-bold text-cyan-400 px-2.5 py-0.5 rounded-full bg-cyan-950/40 border border-cyan-800/60">
+                        {order.topUpPlatform}
+                      </span>
+                    </div>
+                  )}
+
+                  {order.topUpAccountEmail && (
+                    <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
+                      <span className="text-gray-400 font-semibold">Account Email:</span>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-mono text-cyan-300 font-semibold break-all">
+                          {order.topUpAccountEmail}
+                        </span>
+                        <button
+                          onClick={() => copyToClipboard(order.topUpAccountEmail!, 'topup-email')}
+                          className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-semibold border border-gray-700 shrink-0 cursor-pointer"
+                        >
+                          {copiedField === 'topup-email' ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {order.topUpAccountPassword && (
+                    <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
+                      <span className="text-gray-400 font-semibold">Account Password:</span>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-mono text-amber-300 font-semibold break-all">
+                          {showPassword ? order.topUpAccountPassword : '••••••••••••'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] border border-gray-700 cursor-pointer"
+                        >
+                          {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => copyToClipboard(order.topUpAccountPassword!, 'topup-pass')}
+                          className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-semibold border border-gray-700 shrink-0 cursor-pointer"
+                        >
+                          {copiedField === 'topup-pass' ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {order.topUpNotes && (
+                    <div className="pt-1">
+                      <span className="text-gray-400 font-semibold block mb-1">Additional Notes:</span>
+                      <div className="bg-[#050912] p-3 rounded-lg border border-gray-800 text-gray-300 leading-relaxed font-sans whitespace-pre-wrap">
+                        {order.topUpNotes}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* If PROCESSING: Alert to contact Live Chat immediately (matching user screenshot) */}
+                {order.status === 'processing' && (
+                  <div className="bg-[#081a2e] border-2 border-cyan-500/50 rounded-xl p-5 space-y-3 shadow-lg">
+                    <div className="flex items-center space-x-2 text-cyan-400 font-bold text-sm">
+                      <MessageSquare className="w-5 h-5 text-cyan-400 shrink-0" />
+                      <span>Next Step: Contact Live Chat</span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-cyan-200/90 leading-relaxed">
+                      Your top-up request has been registered in our queue. <strong>Please contact our Live Chat immediately</strong> to confirm your top-up details and let the agent begin processing your account.
+                    </p>
+                    <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                      <button
+                        onClick={() => {
+                          const chatBtn = document.querySelector('button[class*="LIVE CHAT SUPPORT"]') as HTMLButtonElement;
+                          if (chatBtn) chatBtn.click();
+                        }}
+                        className="py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-gray-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-2 shadow-md transition cursor-pointer"
+                      >
+                        <MessageSquare className="w-4 h-4 text-gray-950" />
+                        <span>Open Live Chat Now</span>
+                      </button>
+                      <button
+                        onClick={() => router.push(`/topup?code=${encodeURIComponent(order.code)}`)}
+                        className="py-2.5 px-4 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white font-semibold text-xs flex items-center justify-center space-x-1.5 border border-gray-700 transition cursor-pointer"
+                      >
+                        <span>Edit Submitted Information</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* If COMPLETED: Confirmation and Instructions */}
+                {order.status === 'completed' && (
+                  <div className="bg-[#061e12] border-2 border-emerald-500/50 rounded-xl p-5 space-y-3">
+                    <div className="flex items-center space-x-2 text-emerald-400 font-bold text-sm">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                      <span>Top-Up Successfully Added to Account!</span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-emerald-200/90 leading-relaxed">
+                      Our fulfillment team has completed your top-up request. Please open your game or console to verify your added currency/items.
+                    </p>
+                    {order.instructions && (
+                      <div className="bg-[#04120a] p-3.5 rounded-lg border border-emerald-900/60 text-xs text-gray-200 leading-relaxed whitespace-pre-wrap">
+                        {order.instructions}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 🎁 Thank You Box on Top-Up orders */}
+                <div className="bg-gradient-to-r from-emerald-950/40 via-[#071424] to-cyan-950/40 border border-emerald-500/40 rounded-xl p-5 text-xs text-gray-200 space-y-2 shadow-lg">
+                  <div className="font-bold text-amber-400 text-sm">
+                    🎁 Thank You for Your Purchase! ❤️
+                  </div>
+                  <p className="text-gray-300 leading-relaxed font-medium">
+                    We truly appreciate your trust and support! 🙏
+                  </p>
+                  <p className="text-gray-300 leading-relaxed font-medium">
+                    If you are satisfied with your top-up order, we would be very grateful if you could leave us a positive review ⭐ on the platform where you purchased from.
                   </p>
                   <p className="text-emerald-400 font-bold leading-relaxed pt-1">
                     Your feedback means a lot to us and helps us grow and continue providing the best service! 💚

@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'IMOSTRADA Digital Products Delivery Portal',
   description:
-    'Custom digital product delivery website for Kinguin, G2A, Driffle and GAMIVO merchants. Redeem your unique code and track account/key delivery.',
+    'Custom digital product delivery website for GAMIVO, G2A and Driffle merchants. Redeem your unique code and track account, key or top-up delivery.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

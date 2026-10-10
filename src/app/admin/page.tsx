@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Papa from 'papaparse';
 import {
@@ -15,9 +15,19 @@ import {
   updateOrderDelivery,
   getStoreSettings,
   updateStoreSettings,
+  getChatMessages,
+  sendChatMessage,
 } from '@/lib/store';
 import { isSupabaseConfigured } from '@/lib/supabase';
-import { Product, RedeemCode, Order, StoreSettings, OrderStatus } from '@/lib/types';
+import {
+  Product,
+  RedeemCode,
+  Order,
+  StoreSettings,
+  OrderStatus,
+  DeliveryType,
+  ChatMessage,
+} from '@/lib/types';
 import {
   LayoutDashboard,
   Key,
@@ -41,6 +51,15 @@ import {
   Database,
   ShieldCheck,
   AlertCircle,
+  Coins,
+  MessageSquare,
+  Send,
+  Eye,
+  EyeOff,
+  User,
+  Bot,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 
 const ADMIN_PASSCODE = 'admin123';
@@ -55,8 +74,8 @@ const INSTRUCTION_TEMPLATES = [
     text: `1. Create new user on your PS4/PS5.\n2. Sign in with the account email and password.\n3. Go to Settings > Users and Accounts > Other > Console Sharing and Offline Play > Select Enable.`,
   },
   {
-    label: 'Steam Account Template',
-    text: `1. Launch Steam and log in with credentials.\n2. Verify email code if required (contact support for steam guard code).\n3. Download your game and play!`,
+    label: 'Top-Up Completed Template',
+    text: `1. Your top-up request has been completed successfully.\n2. Please launch your game or console to see your added balance/currency.\n3. If you have any questions, feel free to contact us in Live Chat!`,
   },
 ];
 
@@ -66,10 +85,14 @@ export default function AdminPage() {
   const [authError, setAuthError] = useState('');
 
   // Admin Data State
-  const [activeTab, setActiveTab] = useState<'orders' | 'codes' | 'products' | 'settings'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'codes' | 'products' | 'chat' | 'settings'>('orders');
   const [products, setProducts] = useState<Product[]>([]);
   const [codes, setCodes] = useState<RedeemCode[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatReply, setChatReply] = useState('');
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
   const [settings, setSettings] = useState<StoreSettings>({
     storeName: 'IMOSTRADA',
     merchantName: 'imostrada',
@@ -83,53 +106,95 @@ export default function AdminPage() {
 
   // Fulfill Order Modal State
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
-  const [deliveryType, setDeliveryType] = useState<'account' | 'key'>('account');
+  const [deliveryType, setDeliveryType] = useState<DeliveryType>('account');
   const [accountEmail, setAccountEmail] = useState('');
   const [accountPassword, setAccountPassword] = useState('');
   const [twoFactorKey, setTwoFactorKey] = useState('');
   const [productKey, setProductKey] = useState('');
   const [instructions, setInstructions] = useState('');
   const [orderStatus, setOrderStatus] = useState<OrderStatus>('completed');
+  const [showFulfillPass, setShowFulfillPass] = useState(false);
+  const [copiedModalField, setCopiedModalField] = useState<string | null>(null);
 
   // New Product Modal State
   const [newProdName, setNewProdName] = useState('');
   const [newProdCategory, setNewProdCategory] = useState('Gaming Account');
   const [newProdDesc, setNewProdDesc] = useState('');
+  const [newProdDeliveryType, setNewProdDeliveryType] = useState<DeliveryType>('account');
 
   // Generator & Bulk Codes State
   const [selectedProductId, setSelectedProductId] = useState('');
+  const [codeDeliveryType, setCodeDeliveryType] = useState<DeliveryType>('account');
   const [singleCodeInput, setSingleCodeInput] = useState('');
   const [batchPrefix, setBatchPrefix] = useState('GAMIVO-');
   const [batchCount, setBatchCount] = useState(10);
-  const [csvText, setCsvText] = useState('');
 
   // Filters & Search
   const [orderFilter, setOrderFilter] = useState<'all' | 'processing' | 'completed'>('all');
+  const [orderTypeFilter, setOrderTypeFilter] = useState<'all' | 'account' | 'key' | 'topup'>('all');
   const [codeFilter, setCodeFilter] = useState<'all' | 'unused' | 'processing' | 'completed'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  const playChime = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.35);
+    } catch {
+      // AudioContext might be muted by browser until interaction
+    }
+  };
+
   useEffect(() => {
-    // Check local session
     const savedAuth = localStorage.getItem('admin_authenticated');
     if (savedAuth === 'true') {
       setIsAuthenticated(true);
       loadAllData();
     }
-  }, []);
+
+    const handleChatUpdate = () => {
+      getChatMessages().then((msgs) => {
+        setChatMessages(msgs);
+        if (soundEnabled) playChime();
+      });
+    };
+
+    window.addEventListener('imostrada_chat_update', handleChatUpdate);
+    return () => window.removeEventListener('imostrada_chat_update', handleChatUpdate);
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    if (activeTab === 'chat') {
+      chatScrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, activeTab]);
 
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [prodsData, codesData, ordersData, settingsData] = await Promise.all([
+      const [prodsData, codesData, ordersData, settingsData, chatData] = await Promise.all([
         getProducts(),
         getRedeemCodes(),
         getOrders(),
         getStoreSettings(),
+        getChatMessages(),
       ]);
       setProducts(prodsData);
       setCodes(codesData);
       setOrders(ordersData);
       setSettings(settingsData);
+      setChatMessages(chatData);
       if (prodsData.length > 0 && !selectedProductId) {
         setSelectedProductId(prodsData[0].id);
       }
@@ -148,7 +213,7 @@ export default function AdminPage() {
       setAuthError('');
       loadAllData();
     } else {
-      setAuthError('Invalid passcode. Default is admin123');
+      setAuthError('Invalid passcode. Please enter the correct admin security passcode.');
     }
   };
 
@@ -162,19 +227,37 @@ export default function AdminPage() {
     setTimeout(() => setMessage(null), 4000);
   };
 
+  const copyToClipboard = (text: string, fieldName: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedModalField(fieldName);
+    setTimeout(() => setCopiedModalField(null), 2000);
+  };
+
   // Fulfill Order Action
   const openFulfillModal = (orderItem: Order) => {
     setEditingOrder(orderItem);
-    const dType = orderItem.deliveryType || (orderItem.productName?.toLowerCase().includes('key') ? 'key' : 'account');
+    const dType =
+      orderItem.deliveryType ||
+      (orderItem.productName?.toLowerCase().includes('top')
+        ? 'topup'
+        : orderItem.productName?.toLowerCase().includes('key')
+        ? 'key'
+        : 'account');
     setDeliveryType(dType);
     setAccountEmail(orderItem.accountEmail || '');
     setAccountPassword(orderItem.accountPassword || '');
     setTwoFactorKey(orderItem.twoFactorKey || '');
     setProductKey(orderItem.productKey || '');
     setInstructions(
-      orderItem.instructions || (dType === 'key' ? 'This is your product key. Redeem it on Xbox/Microsoft Store to activate your product.' : INSTRUCTION_TEMPLATES[0].text)
+      orderItem.instructions ||
+        (dType === 'topup'
+          ? INSTRUCTION_TEMPLATES[2].text
+          : dType === 'key'
+          ? 'This is your product key. Redeem it on Xbox/Microsoft Store to activate your product.'
+          : INSTRUCTION_TEMPLATES[0].text)
     );
     setOrderStatus(orderItem.status === 'processing' ? 'completed' : orderItem.status);
+    setShowFulfillPass(false);
   };
 
   const saveOrderDelivery = async (e: React.FormEvent) => {
@@ -188,9 +271,15 @@ export default function AdminPage() {
         accountPassword: deliveryType === 'account' ? accountPassword : undefined,
         twoFactorKey: deliveryType === 'account' ? twoFactorKey : undefined,
         productKey: deliveryType === 'key' ? productKey : undefined,
+        topUpOrderNumber: deliveryType === 'topup' ? editingOrder.topUpOrderNumber : undefined,
+        topUpPlatform: deliveryType === 'topup' ? editingOrder.topUpPlatform : undefined,
+        topUpAccountEmail: deliveryType === 'topup' ? editingOrder.topUpAccountEmail : undefined,
+        topUpAccountPassword: deliveryType === 'topup' ? editingOrder.topUpAccountPassword : undefined,
+        topUpNotes: deliveryType === 'topup' ? editingOrder.topUpNotes : undefined,
         instructions,
         status: orderStatus,
       });
+
       showNotification('success', `Order ${editingOrder.orderNumber} updated successfully!`);
       setEditingOrder(null);
       loadAllData();
@@ -210,6 +299,7 @@ export default function AdminPage() {
         name: newProdName,
         category: newProdCategory,
         description: newProdDesc,
+        defaultDeliveryType: newProdDeliveryType,
       });
       setNewProdName('');
       setNewProdDesc('');
@@ -227,9 +317,9 @@ export default function AdminPage() {
     if (!singleCodeInput.trim() || !selectedProductId) return;
 
     try {
-      await addRedeemCode(singleCodeInput, selectedProductId);
+      await addRedeemCode(singleCodeInput, selectedProductId, codeDeliveryType);
       setSingleCodeInput('');
-      showNotification('success', 'Redeem code added!');
+      showNotification('success', `Redeem code added for ${codeDeliveryType} delivery!`);
       loadAllData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error adding code';
@@ -249,8 +339,11 @@ export default function AdminPage() {
     }
 
     try {
-      const res = await bulkAddRedeemCodes(generatedCodes, selectedProductId);
-      showNotification('success', `Batch generated ${res.added} codes (${res.skipped} skipped duplicates).`);
+      const res = await bulkAddRedeemCodes(generatedCodes, selectedProductId, codeDeliveryType);
+      showNotification(
+        'success',
+        `Batch generated ${res.added} ${codeDeliveryType.toUpperCase()} codes (${res.skipped} skipped duplicates).`
+      );
       loadAllData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error batch generating';
@@ -272,12 +365,34 @@ export default function AdminPage() {
           return;
         }
 
-        const res = await bulkAddRedeemCodes(cleanCodes, selectedProductId);
-        showNotification('success', `CSV Import complete! Added ${res.added} codes (${res.skipped} skipped).`);
+        const res = await bulkAddRedeemCodes(cleanCodes, selectedProductId, codeDeliveryType);
+        showNotification(
+          'success',
+          `CSV Import complete! Added ${res.added} ${codeDeliveryType.toUpperCase()} codes (${res.skipped} skipped).`
+        );
         loadAllData();
       },
       error: () => showNotification('error', 'Error parsing CSV file.'),
     });
+  };
+
+  // Send Chat Message Reply from Admin
+  const handleSendChatReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanText = chatReply.trim();
+    if (!cleanText) return;
+
+    setChatReply('');
+    try {
+      await sendChatMessage({
+        sender: 'agent',
+        text: cleanText,
+      });
+      const updated = await getChatMessages();
+      setChatMessages(updated);
+    } catch (e) {
+      console.error('Error sending agent reply', e);
+    }
   };
 
   // Store Settings Update
@@ -311,7 +426,7 @@ export default function AdminPage() {
               type="password"
               value={passcode}
               onChange={(e) => setPasscode(e.target.value)}
-              placeholder="Enter passcode (default: admin123)"
+              placeholder="Enter admin passcode"
               className="w-full bg-gray-950 border border-gray-700 focus:border-purple-400 focus:ring-2 focus:ring-purple-500/20 text-center text-lg text-purple-300 rounded-xl py-3 px-4 outline-none font-mono"
             />
 
@@ -323,7 +438,7 @@ export default function AdminPage() {
 
             <button
               type="submit"
-              className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-sm uppercase tracking-wider shadow-lg transition"
+              className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-sm uppercase tracking-wider shadow-lg transition cursor-pointer"
             >
               Unlock Admin Portal
             </button>
@@ -342,12 +457,15 @@ export default function AdminPage() {
   // Filtered lists
   const filteredOrders = orders.filter((o) => {
     if (orderFilter !== 'all' && o.status !== orderFilter) return false;
+    if (orderTypeFilter !== 'all' && o.deliveryType !== orderTypeFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return (
         o.orderNumber.toLowerCase().includes(q) ||
         o.code.toLowerCase().includes(q) ||
-        o.productName.toLowerCase().includes(q)
+        o.productName.toLowerCase().includes(q) ||
+        (o.topUpOrderNumber && o.topUpOrderNumber.toLowerCase().includes(q)) ||
+        (o.topUpAccountEmail && o.topUpAccountEmail.toLowerCase().includes(q))
       );
     }
     return true;
@@ -364,7 +482,7 @@ export default function AdminPage() {
 
   const processingCount = orders.filter((o) => o.status === 'processing').length;
   const completedCount = orders.filter((o) => o.status === 'completed').length;
-  const unusedCodesCount = codes.filter((c) => c.status === 'unused').length;
+  const customerMessagesCount = chatMessages.filter((m) => m.sender === 'user').length;
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 font-sans flex flex-col">
@@ -398,10 +516,9 @@ export default function AdminPage() {
             <Globe className="w-3.5 h-3.5" />
             <span>View Live Site</span>
           </Link>
-
           <button
             onClick={handleLogout}
-            className="text-xs bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 px-3 py-2 rounded-lg transition border border-rose-500/30 flex items-center space-x-1"
+            className="text-xs bg-rose-950/60 hover:bg-rose-900 text-rose-300 px-3 py-2 rounded-lg transition border border-rose-800/60 flex items-center space-x-1 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Logout</span>
@@ -409,28 +526,23 @@ export default function AdminPage() {
         </div>
       </header>
 
-      {/* Main Admin Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
-        {/* Notification Toast */}
+      {/* Main Content */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
         {message && (
           <div
-            className={`p-4 rounded-xl border text-sm flex items-center space-x-2 ${
+            className={`p-3.5 rounded-xl border text-xs font-semibold flex items-center space-x-2 ${
               message.type === 'success'
-                ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
-                : 'bg-rose-950/80 border-rose-500/50 text-rose-300'
+                ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                : 'bg-rose-950/60 border-rose-500/40 text-rose-300'
             }`}
           >
-            {message.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
-            )}
+            {message.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
             <span>{message.text}</span>
           </div>
         )}
 
-        {/* Overview Stats Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {/* Overview Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between shadow-lg">
             <div>
               <span className="text-xs text-gray-400 font-medium uppercase tracking-wider block">
@@ -446,7 +558,7 @@ export default function AdminPage() {
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between shadow-lg">
             <div>
               <span className="text-xs text-gray-400 font-medium uppercase tracking-wider block">
-                Completed Deliveries
+                Delivered Orders
               </span>
               <span className="text-2xl font-black text-emerald-400">{completedCount}</span>
             </div>
@@ -460,7 +572,9 @@ export default function AdminPage() {
               <span className="text-xs text-gray-400 font-medium uppercase tracking-wider block">
                 Unused Codes
               </span>
-              <span className="text-2xl font-black text-cyan-400">{unusedCodesCount}</span>
+              <span className="text-2xl font-black text-cyan-400">
+                {codes.filter((c) => c.status === 'unused').length}
+              </span>
             </div>
             <div className="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
               <Key className="w-5 h-5" />
@@ -470,21 +584,21 @@ export default function AdminPage() {
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between shadow-lg">
             <div>
               <span className="text-xs text-gray-400 font-medium uppercase tracking-wider block">
-                Active Products
+                Live Support Chats
               </span>
-              <span className="text-2xl font-black text-purple-400">{products.length}</span>
+              <span className="text-2xl font-black text-purple-400">{chatMessages.length}</span>
             </div>
             <div className="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
-              <Package className="w-5 h-5" />
+              <MessageSquare className="w-5 h-5" />
             </div>
           </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-gray-800 space-x-6">
+        <div className="flex border-b border-gray-800 space-x-6 overflow-x-auto">
           <button
             onClick={() => setActiveTab('orders')}
-            className={`py-3 font-semibold text-sm flex items-center space-x-2 border-b-2 transition ${
+            className={`py-3 font-semibold text-sm flex items-center space-x-2 border-b-2 transition shrink-0 cursor-pointer ${
               activeTab === 'orders'
                 ? 'border-amber-400 text-amber-400'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
@@ -501,7 +615,7 @@ export default function AdminPage() {
 
           <button
             onClick={() => setActiveTab('codes')}
-            className={`py-3 font-semibold text-sm flex items-center space-x-2 border-b-2 transition ${
+            className={`py-3 font-semibold text-sm flex items-center space-x-2 border-b-2 transition shrink-0 cursor-pointer ${
               activeTab === 'codes'
                 ? 'border-cyan-400 text-cyan-400'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
@@ -513,7 +627,7 @@ export default function AdminPage() {
 
           <button
             onClick={() => setActiveTab('products')}
-            className={`py-3 font-semibold text-sm flex items-center space-x-2 border-b-2 transition ${
+            className={`py-3 font-semibold text-sm flex items-center space-x-2 border-b-2 transition shrink-0 cursor-pointer ${
               activeTab === 'products'
                 ? 'border-purple-400 text-purple-400'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
@@ -524,10 +638,27 @@ export default function AdminPage() {
           </button>
 
           <button
-            onClick={() => setActiveTab('settings')}
-            className={`py-3 font-semibold text-sm flex items-center space-x-2 border-b-2 transition ${
-              activeTab === 'settings'
+            onClick={() => setActiveTab('chat')}
+            className={`py-3 font-semibold text-sm flex items-center space-x-2 border-b-2 transition shrink-0 cursor-pointer ${
+              activeTab === 'chat'
                 ? 'border-emerald-400 text-emerald-400'
+                : 'border-transparent text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Live Chat Inbox ({chatMessages.length})</span>
+            {customerMessagesCount > 0 && (
+              <span className="bg-emerald-500 text-gray-950 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">
+                {customerMessagesCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`py-3 font-semibold text-sm flex items-center space-x-2 border-b-2 transition shrink-0 cursor-pointer ${
+              activeTab === 'settings'
+                ? 'border-gray-200 text-white'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >
@@ -547,14 +678,26 @@ export default function AdminPage() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by code or order #..."
+                    placeholder="Search by code, order #, email..."
                     className="w-full bg-gray-950 border border-gray-700 text-xs text-gray-200 rounded-lg py-2 pl-8 pr-3 outline-none focus:border-amber-400"
                   />
                   <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-2.5" />
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+              <div className="flex items-center space-x-2 w-full sm:w-auto justify-end flex-wrap gap-2">
+                <span className="text-xs text-gray-400">Type:</span>
+                <select
+                  value={orderTypeFilter}
+                  onChange={(e: any) => setOrderTypeFilter(e.target.value)}
+                  className="bg-gray-950 border border-gray-700 text-xs text-gray-200 rounded-lg py-2 px-3 outline-none"
+                >
+                  <option value="all">All Types</option>
+                  <option value="topup">🪙 Top-Up Service</option>
+                  <option value="account">👤 Account Delivery</option>
+                  <option value="key">🔑 Product Key</option>
+                </select>
+
                 <span className="text-xs text-gray-400">Status:</span>
                 <select
                   value={orderFilter}
@@ -568,7 +711,7 @@ export default function AdminPage() {
 
                 <button
                   onClick={loadAllData}
-                  className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition"
+                  className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition cursor-pointer"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </button>
@@ -583,15 +726,16 @@ export default function AdminPage() {
                     <th className="p-4">Order #</th>
                     <th className="p-4">Redeem Code</th>
                     <th className="p-4">Product</th>
+                    <th className="p-4">Type</th>
                     <th className="p-4">Status</th>
-                    <th className="p-4">Delivery Credentials</th>
+                    <th className="p-4">Customer / Delivery Info</th>
                     <th className="p-4 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800/80">
                   {filteredOrders.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-gray-500">
+                      <td colSpan={7} className="p-8 text-center text-gray-500">
                         No orders found matching criteria.
                       </td>
                     </tr>
@@ -601,6 +745,26 @@ export default function AdminPage() {
                         <td className="p-4 font-mono font-bold text-amber-400">{o.orderNumber}</td>
                         <td className="p-4 font-mono text-cyan-300">{o.code}</td>
                         <td className="p-4 font-semibold text-white">{o.productName}</td>
+                        <td className="p-4">
+                          {o.deliveryType === 'topup' && (
+                            <span className="inline-flex items-center space-x-1 bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded text-[11px] font-bold">
+                              <Coins className="w-3 h-3" />
+                              <span>Top-Up</span>
+                            </span>
+                          )}
+                          {o.deliveryType === 'key' && (
+                            <span className="inline-flex items-center space-x-1 bg-purple-500/10 text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded text-[11px] font-bold">
+                              <Key className="w-3 h-3" />
+                              <span>Product Key</span>
+                            </span>
+                          )}
+                          {(!o.deliveryType || o.deliveryType === 'account') && (
+                            <span className="inline-flex items-center space-x-1 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded text-[11px] font-bold">
+                              <User className="w-3 h-3" />
+                              <span>Account</span>
+                            </span>
+                          )}
+                        </td>
                         <td className="p-4">
                           {o.status === 'processing' ? (
                             <span className="inline-flex items-center space-x-1.5 bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-full border border-amber-500/30 text-[11px] font-bold">
@@ -614,26 +778,47 @@ export default function AdminPage() {
                           )}
                         </td>
                         <td className="p-4 font-mono text-gray-400 text-[11px]">
-                          {o.accountEmail ? (
+                          {o.deliveryType === 'topup' ? (
                             <div>
-                              <div className="text-cyan-300 truncate max-w-[180px]">{o.accountEmail}</div>
-                              <div className="text-gray-500">Password: ••••••••</div>
+                              <div className="text-amber-300 font-bold">
+                                {o.topUpPlatform || 'Platform'}: {o.topUpOrderNumber || 'Order #'}
+                              </div>
+                              <div className="text-cyan-300 truncate max-w-[200px]">
+                                {o.topUpAccountEmail || 'Pending customer form'}
+                              </div>
+                            </div>
+                          ) : o.deliveryType === 'key' ? (
+                            <div>
+                              <div className="text-cyan-300 font-bold truncate max-w-[200px]">
+                                {o.productKey || 'Not delivered yet'}
+                              </div>
                             </div>
                           ) : (
-                            <span className="text-rose-400 italic">Not set yet</span>
+                            <div>
+                              <div className="text-cyan-300 truncate max-w-[180px]">
+                                {o.accountEmail || 'Not set yet'}
+                              </div>
+                              <div className="text-gray-500">Password: ••••••••</div>
+                            </div>
                           )}
                         </td>
                         <td className="p-4 text-right">
                           <button
                             onClick={() => openFulfillModal(o)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 ml-auto ${
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 ml-auto cursor-pointer ${
                               o.status === 'processing'
                                 ? 'bg-amber-500 hover:bg-amber-400 text-gray-950 shadow-md'
                                 : 'bg-gray-800 hover:bg-gray-700 text-cyan-300 border border-gray-700'
                             }`}
                           >
                             <Edit3 className="w-3.5 h-3.5" />
-                            <span>{o.status === 'processing' ? 'Fulfill Order' : 'Edit Credentials'}</span>
+                            <span>
+                              {o.status === 'processing'
+                                ? o.deliveryType === 'topup'
+                                  ? 'Fulfill Top-Up'
+                                  : 'Fulfill Order'
+                                : 'Edit Details'}
+                            </span>
                           </button>
                         </td>
                       </tr>
@@ -648,7 +833,6 @@ export default function AdminPage() {
         {/* TAB 2: REDEEM CODES & CSV IMPORTER */}
         {activeTab === 'codes' && (
           <div className="space-y-6">
-            {/* Generator & CSV Upload Card */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Single / Batch Code Generator */}
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4 shadow-xl">
@@ -673,6 +857,51 @@ export default function AdminPage() {
                     </select>
                   </div>
 
+                  {/* Delivery Type Option */}
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Redeem Delivery Workflow:</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCodeDeliveryType('account')}
+                        className={`py-2 px-2 text-xs font-bold rounded-lg border transition cursor-pointer flex items-center justify-center space-x-1 ${
+                          codeDeliveryType === 'account'
+                            ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300'
+                            : 'border-gray-800 bg-gray-950 text-gray-400'
+                        }`}
+                      >
+                        <User className="w-3 h-3" />
+                        <span>Account</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCodeDeliveryType('key')}
+                        className={`py-2 px-2 text-xs font-bold rounded-lg border transition cursor-pointer flex items-center justify-center space-x-1 ${
+                          codeDeliveryType === 'key'
+                            ? 'border-purple-400 bg-purple-500/20 text-purple-300'
+                            : 'border-gray-800 bg-gray-950 text-gray-400'
+                        }`}
+                      >
+                        <Key className="w-3 h-3" />
+                        <span>Key</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCodeDeliveryType('topup')}
+                        className={`py-2 px-2 text-xs font-bold rounded-lg border transition cursor-pointer flex items-center justify-center space-x-1 ${
+                          codeDeliveryType === 'topup'
+                            ? 'border-amber-400 bg-amber-500/20 text-amber-300'
+                            : 'border-gray-800 bg-gray-950 text-gray-400'
+                        }`}
+                      >
+                        <Coins className="w-3 h-3" />
+                        <span>Top-Up</span>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Add Single Code */}
                   <form onSubmit={handleAddSingleCode} className="space-y-2">
                     <label className="text-xs text-gray-400 block">Add Single Code:</label>
@@ -686,7 +915,7 @@ export default function AdminPage() {
                       />
                       <button
                         type="submit"
-                        className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold text-xs rounded-lg transition"
+                        className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold text-xs rounded-lg transition cursor-pointer"
                       >
                         Add Code
                       </button>
@@ -697,13 +926,16 @@ export default function AdminPage() {
                   <div className="pt-3 border-t border-gray-800 space-y-2">
                     <label className="text-xs text-gray-400 block">Quick Batch Random Code Generator:</label>
                     <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
+                      <select
                         value={batchPrefix}
-                        onChange={(e) => setBatchPrefix(e.target.value.toUpperCase())}
-                        placeholder="Prefix (e.g. GAMIVO-)"
+                        onChange={(e) => setBatchPrefix(e.target.value)}
                         className="bg-gray-950 border border-gray-700 text-xs font-mono text-cyan-300 rounded-lg p-2 outline-none uppercase"
-                      />
+                      >
+                        <option value="GAMIVO-">Prefix: GAMIVO-</option>
+                        <option value="G2A-">Prefix: G2A-</option>
+                        <option value="DRIFFLE-">Prefix: DRIFFLE-</option>
+                        <option value="IMOS-">Prefix: IMOS-</option>
+                      </select>
                       <input
                         type="number"
                         value={batchCount}
@@ -715,9 +947,9 @@ export default function AdminPage() {
                     <button
                       type="button"
                       onClick={handleBatchGenerate}
-                      className="w-full py-2 bg-gray-800 hover:bg-gray-700 text-cyan-300 font-bold text-xs rounded-lg border border-gray-700 transition"
+                      className="w-full py-2 bg-gray-800 hover:bg-gray-700 text-cyan-300 font-bold text-xs rounded-lg border border-gray-700 transition cursor-pointer"
                     >
-                      ⚡ Generate {batchCount} Random Codes
+                      ⚡ Generate {batchCount} Random {codeDeliveryType.toUpperCase()} Codes
                     </button>
                   </div>
                 </div>
@@ -731,7 +963,7 @@ export default function AdminPage() {
                 </h3>
 
                 <p className="text-xs text-gray-400">
-                  Upload a CSV file containing redeem codes exported from GAMIVO or Kinguin merchant tool.
+                  Upload a CSV file containing redeem codes exported from GAMIVO, G2A or Driffle merchant tool.
                 </p>
 
                 <div className="border-2 border-dashed border-gray-700 hover:border-amber-400/60 rounded-xl p-6 text-center space-y-3 bg-gray-950/50 transition">
@@ -785,6 +1017,7 @@ export default function AdminPage() {
                   <tr>
                     <th className="p-3">Redeem Code</th>
                     <th className="p-3">Product Name</th>
+                    <th className="p-3">Delivery Type</th>
                     <th className="p-3">Status</th>
                     <th className="p-3 text-right">Delete</th>
                   </tr>
@@ -794,6 +1027,11 @@ export default function AdminPage() {
                     <tr key={c.id} className="hover:bg-gray-850/50 transition">
                       <td className="p-3 font-mono font-bold text-cyan-300">{c.code}</td>
                       <td className="p-3 text-white">{c.productName}</td>
+                      <td className="p-3">
+                        <span className="text-[10px] uppercase font-bold text-gray-400 bg-gray-800 px-2 py-0.5 rounded">
+                          {c.deliveryType || 'account'}
+                        </span>
+                      </td>
                       <td className="p-3">
                         {c.status === 'unused' && (
                           <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded text-[10px] font-bold">
@@ -817,7 +1055,7 @@ export default function AdminPage() {
                             await deleteRedeemCode(c.id);
                             loadAllData();
                           }}
-                          className="p-1 text-gray-500 hover:text-rose-400 transition"
+                          className="p-1 text-gray-500 hover:text-rose-400 transition cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -833,7 +1071,6 @@ export default function AdminPage() {
         {/* TAB 3: PRODUCTS MANAGER */}
         {activeTab === 'products' && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Add Product Form */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4 shadow-xl h-fit">
               <h3 className="text-sm font-bold text-purple-400 flex items-center space-x-2">
                 <Plus className="w-4 h-4" />
@@ -847,7 +1084,7 @@ export default function AdminPage() {
                     type="text"
                     value={newProdName}
                     onChange={(e) => setNewProdName(e.target.value)}
-                    placeholder="e.g. Xbox Game Pass 12 Months"
+                    placeholder="e.g. Fortnite 800 V-Bucks Top Up"
                     className="w-full bg-gray-950 border border-gray-700 text-xs text-white rounded-lg p-2.5 outline-none"
                     required
                   />
@@ -859,81 +1096,254 @@ export default function AdminPage() {
                     type="text"
                     value={newProdCategory}
                     onChange={(e) => setNewProdCategory(e.target.value)}
-                    placeholder="e.g. Subscription / Game Account"
+                    placeholder="e.g. Top-Up Service, Game Key, Account"
                     className="w-full bg-gray-950 border border-gray-700 text-xs text-white rounded-lg p-2.5 outline-none"
+                    required
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-400 block mb-1">Description:</label>
+                  <label className="text-xs text-gray-400 block mb-1">Default Delivery Service:</label>
+                  <select
+                    value={newProdDeliveryType}
+                    onChange={(e: any) => setNewProdDeliveryType(e.target.value)}
+                    className="w-full bg-gray-950 border border-gray-700 text-xs text-white rounded-lg p-2.5 outline-none"
+                  >
+                    <option value="account">👤 Account Delivery (Email + Password + 2FA)</option>
+                    <option value="key">🔑 Product Key Delivery</option>
+                    <option value="topup">🪙 Top-Up Service (Customer Account Request)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Description (Optional):</label>
                   <textarea
                     value={newProdDesc}
                     onChange={(e) => setNewProdDesc(e.target.value)}
-                    placeholder="Product details & terms..."
+                    placeholder="Short product description..."
                     className="w-full bg-gray-950 border border-gray-700 text-xs text-white rounded-lg p-2.5 outline-none h-20"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-lg transition"
+                  className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition shadow-md cursor-pointer"
                 >
-                  Save Product
+                  Create Product
                 </button>
               </form>
             </div>
 
-            {/* Products Table */}
-            <div className="md:col-span-2 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-xl">
-              <div className="p-4 bg-gray-950 border-b border-gray-800">
-                <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">
-                  Product Catalog ({products.length})
-                </span>
+            <div className="md:col-span-2 space-y-4">
+              <h3 className="text-sm font-bold text-gray-300">Catalog Products ({products.length})</h3>
+              <div className="grid grid-cols-1 gap-3">
+                {products.map((p) => (
+                  <div
+                    key={p.id}
+                    className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between hover:border-gray-700 transition"
+                  >
+                    <div>
+                      <h4 className="text-sm font-bold text-white">{p.name}</h4>
+                      <div className="flex items-center space-x-2 text-[11px] text-gray-400 mt-1">
+                        <span className="bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/40">
+                          {p.category}
+                        </span>
+                        <span>•</span>
+                        <span className="text-amber-400 font-semibold uppercase">
+                          {p.defaultDeliveryType || 'account'}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await deleteProduct(p.id);
+                        loadAllData();
+                      }}
+                      className="p-2 text-gray-500 hover:text-rose-400 transition cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
-
-              <table className="w-full text-left text-xs text-gray-300">
-                <thead className="bg-gray-950 text-gray-400 uppercase tracking-wider font-semibold border-b border-gray-800">
-                  <tr>
-                    <th className="p-3">Title</th>
-                    <th className="p-3">Category</th>
-                    <th className="p-3">Codes Qty</th>
-                    <th className="p-3 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800/80">
-                  {products.map((p) => {
-                    const prodCodesCount = codes.filter((c) => c.productId === p.id).length;
-                    return (
-                      <tr key={p.id} className="hover:bg-gray-850/50 transition">
-                        <td className="p-3 font-semibold text-white">{p.name}</td>
-                        <td className="p-3 text-gray-400">{p.category}</td>
-                        <td className="p-3 font-mono text-cyan-400">{prodCodesCount} codes</td>
-                        <td className="p-3 text-right">
-                          <button
-                            onClick={async () => {
-                              await deleteProduct(p.id);
-                              loadAllData();
-                            }}
-                            className="p-1 text-gray-500 hover:text-rose-400 transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
             </div>
           </div>
         )}
 
-        {/* TAB 4: STORE SETTINGS */}
+        {/* TAB 4: LIVE CHAT INBOX (Answer Live Chat from Customers!) */}
+        {activeTab === 'chat' && (
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[650px]">
+            {/* Chat Inbox Header */}
+            <div className="bg-[#0b1322] border-b border-gray-800 p-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="relative">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                    <MessageSquare className="w-5 h-5" />
+                  </div>
+                  <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-gray-900 rounded-full" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Live Chat Customer Inbox</h3>
+                  <div className="text-[11px] text-gray-400 flex items-center space-x-2">
+                    <span className="text-emerald-400 font-medium">● Real-time Live Connection</span>
+                    <span>•</span>
+                    <span>Total Messages: {chatMessages.length}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setSoundEnabled(!soundEnabled)}
+                  className={`p-2 rounded-lg border text-xs flex items-center space-x-1.5 transition cursor-pointer ${
+                    soundEnabled
+                      ? 'bg-gray-800 border-gray-700 text-cyan-400'
+                      : 'bg-gray-950 border-gray-800 text-gray-500'
+                  }`}
+                  title="Toggle Message Alert Sound"
+                >
+                  {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                  <span className="hidden sm:inline">{soundEnabled ? 'Sound ON' : 'Muted'}</span>
+                </button>
+
+                <button
+                  onClick={loadAllData}
+                  className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition border border-gray-700 cursor-pointer"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Answer Snippets */}
+            <div className="bg-[#070e1a] px-4 py-2.5 border-b border-gray-800 flex items-center gap-2 overflow-x-auto text-[11px]">
+              <span className="text-gray-400 font-bold shrink-0">Quick Answers:</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setChatReply('Hello! Welcome to IMOSTRADA support. How can I assist you with your order or top-up today?')
+                }
+                className="bg-gray-800 hover:bg-gray-700 text-cyan-300 px-3 py-1 rounded-full whitespace-nowrap transition cursor-pointer"
+              >
+                👋 Welcome & Help
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setChatReply(
+                    'We have received your top-up request! Our team is processing it right now. Usually takes 5-30 minutes.'
+                  )
+                }
+                className="bg-gray-800 hover:bg-gray-700 text-amber-300 px-3 py-1 rounded-full whitespace-nowrap transition cursor-pointer"
+              >
+                ⏳ Top-Up Processing
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setChatReply(
+                    'Your top-up has been completed successfully! Please open your game to verify your balance. Enjoy!'
+                  )
+                }
+                className="bg-gray-800 hover:bg-gray-700 text-emerald-300 px-3 py-1 rounded-full whitespace-nowrap transition cursor-pointer"
+              >
+                ✅ Top-Up Completed
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setChatReply(
+                    'Could you please provide your marketplace order number (e.g. from GAMIVO, G2A or Driffle)?'
+                  )
+                }
+                className="bg-gray-800 hover:bg-gray-700 text-purple-300 px-3 py-1 rounded-full whitespace-nowrap transition cursor-pointer"
+              >
+                ❓ Request Order #
+              </button>
+            </div>
+
+            {/* Messages Feed */}
+            <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-[#060a12]">
+              {chatMessages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-2">
+                  <MessageSquare className="w-8 h-8 opacity-40" />
+                  <p className="text-xs">No chat messages yet. Incoming customer messages will appear here.</p>
+                </div>
+              ) : (
+                chatMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex items-start gap-3 ${
+                      msg.sender === 'agent' ? 'flex-row-reverse' : ''
+                    }`}
+                  >
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
+                        msg.sender === 'user'
+                          ? 'bg-amber-500 text-gray-950 shadow-md shadow-amber-500/20'
+                          : 'bg-cyan-500 text-gray-950 shadow-md shadow-cyan-500/20'
+                      }`}
+                    >
+                      {msg.sender === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                    </div>
+
+                    <div className={`max-w-[75%] space-y-1`}>
+                      <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                        <span className="font-bold text-gray-300">
+                          {msg.sender === 'user' ? 'Customer' : 'Admin Support (You)'}
+                        </span>
+                        <span>•</span>
+                        <span>{msg.timestamp}</span>
+                        {msg.orderNumber && (
+                          <span className="bg-amber-500/10 text-amber-400 px-2 py-0.2 rounded font-mono font-bold">
+                            Order #{msg.orderNumber}
+                          </span>
+                        )}
+                      </div>
+
+                      <div
+                        className={`p-3.5 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap ${
+                          msg.sender === 'user'
+                            ? 'bg-[#0d1829] border border-gray-800 text-gray-100 rounded-tl-none font-medium'
+                            : 'bg-cyan-950/60 border border-cyan-800/80 text-cyan-100 rounded-tr-none font-sans'
+                        }`}
+                      >
+                        {msg.text}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={chatScrollRef} />
+            </div>
+
+            {/* Reply Input Form */}
+            <form onSubmit={handleSendChatReply} className="p-3 bg-[#09111d] border-t border-gray-800 flex gap-2">
+              <input
+                type="text"
+                value={chatReply}
+                onChange={(e) => setChatReply(e.target.value)}
+                placeholder="Type your reply to the customer..."
+                className="flex-1 bg-[#060a12] border border-gray-700 text-xs text-white rounded-xl py-3 px-4 outline-none focus:border-cyan-400 font-sans"
+              />
+              <button
+                type="submit"
+                disabled={!chatReply.trim()}
+                className="px-5 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-gray-950 font-bold text-xs uppercase tracking-wider transition flex items-center space-x-1.5 shadow-md cursor-pointer"
+              >
+                <Send className="w-4 h-4" />
+                <span>Send Reply</span>
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* TAB 5: STORE SETTINGS */}
         {activeTab === 'settings' && (
-          <div className="max-w-2xl bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-xl space-y-6">
-            <h3 className="text-base font-bold text-emerald-400 flex items-center space-x-2">
-              <Settings className="w-5 h-5" />
-              <span>Portal Customization & Merchant Settings</span>
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-xl shadow-xl">
+            <h3 className="text-sm font-bold text-white mb-4 flex items-center space-x-2">
+              <Settings className="w-4 h-4 text-emerald-400" />
+              <span>General Store Settings</span>
             </h3>
 
             <form onSubmit={handleSaveSettings} className="space-y-4 text-xs">
@@ -984,7 +1394,7 @@ export default function AdminPage() {
 
               <button
                 type="submit"
-                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-xl text-xs uppercase tracking-wider transition shadow-lg"
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold rounded-xl text-xs uppercase tracking-wider transition shadow-lg cursor-pointer"
               >
                 Save Settings
               </button>
@@ -996,7 +1406,7 @@ export default function AdminPage() {
       {/* FULFILL ORDER MODAL */}
       {editingOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-amber-500/40 rounded-2xl max-w-lg w-full p-6 text-gray-100 shadow-2xl space-y-4">
+          <div className="bg-gray-900 border border-amber-500/40 rounded-2xl max-w-xl w-full p-6 text-gray-100 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-gray-800 pb-3">
               <div>
                 <span className="text-xs text-amber-400 font-bold uppercase tracking-wider">
@@ -1006,7 +1416,7 @@ export default function AdminPage() {
               </div>
               <button
                 onClick={() => setEditingOrder(null)}
-                className="text-gray-400 hover:text-white text-sm"
+                className="text-gray-400 hover:text-white text-sm cursor-pointer"
               >
                 ✕
               </button>
@@ -1014,52 +1424,170 @@ export default function AdminPage() {
 
             <form onSubmit={saveOrderDelivery} className="space-y-4 text-xs">
               <div className="bg-gray-950 p-3 rounded-lg border border-gray-800 space-y-1">
-                <div>Product: <strong className="text-cyan-300">{editingOrder.productName}</strong></div>
-                <div>Code: <strong className="text-amber-300 font-mono">{editingOrder.code}</strong></div>
+                <div>
+                  Product: <strong className="text-cyan-300">{editingOrder.productName}</strong>
+                </div>
+                <div>
+                  Code: <strong className="text-amber-300 font-mono">{editingOrder.code}</strong>
+                </div>
               </div>
 
               {/* Delivery Type Selector */}
               <div>
-                <label className="text-gray-300 font-bold block mb-1.5">Select Delivery Type:</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="text-gray-300 font-bold block mb-1.5">Select Delivery Workflow:</label>
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       setDeliveryType('account');
-                      if (!instructions || instructions.includes('product key')) {
+                      if (!instructions || instructions.includes('product key') || instructions.includes('top-up')) {
                         setInstructions(INSTRUCTION_TEMPLATES[0].text);
                       }
                     }}
-                    className={`py-2 px-3 rounded-lg font-bold text-xs border transition flex items-center justify-center space-x-2 ${
+                    className={`py-2 px-2 rounded-lg font-bold text-xs border transition flex items-center justify-center space-x-1 cursor-pointer ${
                       deliveryType === 'account'
                         ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
                         : 'bg-gray-950 border-gray-700 text-gray-400 hover:text-gray-200'
                     }`}
                   >
-                    <span>👤 Account Delivery</span>
+                    <span>👤 Account</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => {
                       setDeliveryType('key');
-                      if (!instructions || instructions.includes('Xbox app')) {
+                      if (!instructions || instructions.includes('Xbox app') || instructions.includes('top-up')) {
                         setInstructions('This is your product key. Redeem it on Xbox/Microsoft Store to activate your product.');
                       }
                     }}
-                    className={`py-2 px-3 rounded-lg font-bold text-xs border transition flex items-center justify-center space-x-2 ${
+                    className={`py-2 px-2 rounded-lg font-bold text-xs border transition flex items-center justify-center space-x-1 cursor-pointer ${
                       deliveryType === 'key'
                         ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
                         : 'bg-gray-950 border-gray-700 text-gray-400 hover:text-gray-200'
                     }`}
                   >
-                    <span>🔑 Product Key Delivery</span>
+                    <span>🔑 Key</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeliveryType('topup');
+                      if (!instructions || instructions.includes('Xbox app') || instructions.includes('product key')) {
+                        setInstructions(INSTRUCTION_TEMPLATES[2].text);
+                      }
+                    }}
+                    className={`py-2 px-2 rounded-lg font-bold text-xs border transition flex items-center justify-center space-x-1 cursor-pointer ${
+                      deliveryType === 'topup'
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                        : 'bg-gray-950 border-gray-700 text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <span>🪙 Top-Up</span>
                   </button>
                 </div>
               </div>
 
-              {/* ACCOUNT DELIVERY FIELDS */}
-              {deliveryType === 'account' ? (
+              {/* 1. TOP-UP CUSTOMER DETAILS DISPLAY */}
+              {deliveryType === 'topup' && (
+                <div className="bg-[#070e1a] border border-amber-500/30 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-gray-800">
+                    <span className="font-bold text-amber-400 flex items-center gap-1.5">
+                      <Coins className="w-4 h-4" /> Customer Top-Up Request Details
+                    </span>
+                    <span className="text-[10px] text-gray-400">
+                      {editingOrder.topUpSubmittedAt
+                        ? `Submitted ${new Date(editingOrder.topUpSubmittedAt).toLocaleTimeString()}`
+                        : 'Customer Form'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="text-gray-400 block text-[11px]">Platform:</span>
+                      <strong className="text-cyan-300">{editingOrder.topUpPlatform || 'GAMIVO'}</strong>
+                    </div>
+
+                    <div>
+                      <span className="text-gray-400 block text-[11px]">Order #:</span>
+                      <div className="flex items-center space-x-1">
+                        <strong className="text-amber-400 font-mono">
+                          {editingOrder.topUpOrderNumber || 'Not submitted yet'}
+                        </strong>
+                        {editingOrder.topUpOrderNumber && (
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(editingOrder.topUpOrderNumber!, 'orderNo')}
+                            className="p-1 text-gray-400 hover:text-white"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {editingOrder.topUpAccountEmail ? (
+                    <div>
+                      <span className="text-gray-400 block text-[11px]">Customer Account Email:</span>
+                      <div className="flex items-center justify-between bg-gray-950 p-2 rounded border border-gray-800 mt-1">
+                        <span className="font-mono text-cyan-300">{editingOrder.topUpAccountEmail}</span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(editingOrder.topUpAccountEmail!, 'topUpEmail')}
+                          className="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-[10px] font-bold"
+                        >
+                          {copiedModalField === 'topUpEmail' ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-rose-400 text-xs italic">
+                      Customer has not submitted the account email yet.
+                    </div>
+                  )}
+
+                  {editingOrder.topUpAccountPassword && (
+                    <div>
+                      <span className="text-gray-400 block text-[11px]">Customer Account Password:</span>
+                      <div className="flex items-center justify-between bg-gray-950 p-2 rounded border border-gray-800 mt-1">
+                        <span className="font-mono text-amber-300">
+                          {showFulfillPass ? editingOrder.topUpAccountPassword : '••••••••••••'}
+                        </span>
+                        <div className="flex items-center space-x-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowFulfillPass(!showFulfillPass)}
+                            className="p-1 text-gray-400 hover:text-white"
+                          >
+                            {showFulfillPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(editingOrder.topUpAccountPassword!, 'topUpPass')}
+                            className="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-[10px] font-bold"
+                          >
+                            {copiedModalField === 'topUpPass' ? 'Copied' : 'Copy'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {editingOrder.topUpNotes && (
+                    <div>
+                      <span className="text-gray-400 block text-[11px]">Customer Notes:</span>
+                      <div className="bg-gray-950 p-2 rounded border border-gray-800 text-gray-300 text-[11px] mt-1 whitespace-pre-wrap">
+                        {editingOrder.topUpNotes}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 2. ACCOUNT DELIVERY FIELDS */}
+              {deliveryType === 'account' && (
                 <>
                   <div>
                     <label className="text-gray-300 font-bold block mb-1">Account Email / Username:</label>
@@ -1067,7 +1595,7 @@ export default function AdminPage() {
                       type="text"
                       value={accountEmail}
                       onChange={(e) => setAccountEmail(e.target.value)}
-                      placeholder="e.g. gamer.delivery.acc99@outlook"
+                      placeholder="e.g. gamer.delivery.acc99@outlook.com"
                       className="w-full bg-gray-950 border border-gray-700 text-cyan-300 font-mono rounded-lg p-2.5 outline-none"
                       required
                     />
@@ -1096,8 +1624,10 @@ export default function AdminPage() {
                     />
                   </div>
                 </>
-              ) : (
-                /* PRODUCT KEY DELIVERY FIELDS */
+              )}
+
+              {/* 3. PRODUCT KEY DELIVERY FIELDS */}
+              {deliveryType === 'key' && (
                 <div>
                   <label className="text-gray-300 font-bold block mb-1">Product Activation Key:</label>
                   <input
@@ -1111,28 +1641,29 @@ export default function AdminPage() {
                 </div>
               )}
 
+              {/* Instructions and Delivery Notes */}
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <label className="text-gray-300 font-bold">Instructions & Notes:</label>
-                  {deliveryType === 'account' && (
-                    <div className="flex gap-1">
-                      {INSTRUCTION_TEMPLATES.map((tmpl, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => setInstructions(tmpl.text)}
-                          className="text-[10px] bg-gray-800 hover:bg-gray-700 text-cyan-400 px-2 py-0.5 rounded border border-gray-700"
-                        >
-                          {tmpl.label.split(' ')[0]}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <label className="text-gray-300 font-bold">
+                    {deliveryType === 'topup' ? 'Completion Note to Customer:' : 'Instructions & Notes:'}
+                  </label>
+                  <div className="flex gap-1">
+                    {INSTRUCTION_TEMPLATES.map((tmpl, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setInstructions(tmpl.text)}
+                        className="text-[10px] bg-gray-800 hover:bg-gray-700 text-cyan-400 px-2 py-0.5 rounded border border-gray-700 cursor-pointer"
+                      >
+                        {tmpl.label.split(' ')[0]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <textarea
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
-                  placeholder="Step by step instructions for customer..."
+                  placeholder="Step by step instructions or completion note for customer..."
                   className="w-full bg-gray-950 border border-gray-700 text-gray-200 rounded-lg p-2.5 outline-none h-24 font-sans"
                 />
               </div>
@@ -1144,8 +1675,8 @@ export default function AdminPage() {
                   onChange={(e: any) => setOrderStatus(e.target.value)}
                   className="w-full bg-gray-950 border border-gray-700 text-white rounded-lg p-2.5 outline-none"
                 >
-                  <option value="completed">✓ Completed (Deliver Credentials / Key)</option>
-                  <option value="processing">⏳ Processing (Keep In Queue)</option>
+                  <option value="completed">✓ Completed (Order Fulfilled)</option>
+                  <option value="processing">⏳ Processing (Keep in Queue)</option>
                 </select>
               </div>
 
@@ -1153,13 +1684,13 @@ export default function AdminPage() {
                 <button
                   type="button"
                   onClick={() => setEditingOrder(null)}
-                  className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition"
+                  className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold rounded-lg transition shadow-md"
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold rounded-lg transition shadow-md cursor-pointer"
                 >
                   Save & Complete Delivery
                 </button>

@@ -109,6 +109,7 @@ export async function getProducts(): Promise<Product[]> {
         name: item.name,
         category: item.category,
         description: item.description,
+        defaultDeliveryType: item.default_delivery_type || 'account',
         createdAt: item.created_at,
       }));
     }
@@ -130,6 +131,7 @@ export async function addProduct(product: Omit<Product, 'id' | 'createdAt'>): Pr
         name: product.name,
         category: product.category,
         description: product.description,
+        default_delivery_type: product.defaultDeliveryType || 'account',
       })
       .select()
       .single();
@@ -140,6 +142,7 @@ export async function addProduct(product: Omit<Product, 'id' | 'createdAt'>): Pr
         name: data.name,
         category: data.category,
         description: data.description,
+        defaultDeliveryType: data.default_delivery_type || 'account',
         createdAt: data.created_at,
       };
     }
@@ -174,6 +177,7 @@ export async function getRedeemCodes(): Promise<RedeemCode[]> {
         code: item.code,
         productId: item.product_id,
         productName: item.products?.name || 'Unknown Product',
+        deliveryType: (item.delivery_type as DeliveryType) || 'account',
         status: item.status,
         createdAt: item.created_at,
         usedAt: item.used_at,

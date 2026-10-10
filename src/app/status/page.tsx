@@ -5,7 +5,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { TermsModal } from '@/components/TermsModal';
-import { getStoreSettings, getOrderDetails } from '@/lib/store';
+import { LiveChatWidget } from '@/components/LiveChatWidget';
+import { getStoreSettings, getOrderDetails, submitTopUpRequest, sendChatMessage } from '@/lib/store';
 import { StoreSettings, Order } from '@/lib/types';
 import {
   Search,
@@ -26,6 +27,10 @@ import {
   Coins,
   MessageSquare,
   ShoppingCart,
+  Send,
+  Grid,
+  AlertCircle,
+  Edit3,
 } from 'lucide-react';
 
 function OrderStatusContent() {
@@ -49,6 +54,17 @@ function OrderStatusContent() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
 
+  // Top-Up Form State (for embedded form)
+  const [isEditingTopUp, setIsEditingTopUp] = useState(false);
+  const [formOrderNumber, setFormOrderNumber] = useState('');
+  const [formPlatform, setFormPlatform] = useState<'GAMIVO' | 'G2A' | 'Driffle' | 'Other'>('GAMIVO');
+  const [formAccountEmail, setFormAccountEmail] = useState('');
+  const [formAccountPassword, setFormAccountPassword] = useState('');
+  const [formShowPassword, setFormShowPassword] = useState(false);
+  const [formNotes, setFormNotes] = useState('');
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
+
   useEffect(() => {
     getStoreSettings().then(setSettings);
     if (initialCode) {
@@ -63,10 +79,30 @@ function OrderStatusContent() {
     setLoading(true);
     setSearched(true);
     try {
-      const foundOrder = await getOrderDetails(query);
-      setOrder(foundOrder);
+      const data = await getOrderDetails(query);
+      setOrder(data);
+      if (data) {
+        // Initialize Top-Up Form state if applicable
+        setFormOrderNumber(data.topUpOrderNumber || '');
+        setFormPlatform((data.topUpPlatform as any) || 'GAMIVO');
+        setFormAccountEmail(data.topUpAccountEmail || '');
+        setFormAccountPassword(data.topUpAccountPassword || '');
+        setFormNotes(data.topUpNotes || '');
+        // If it's a top-up product and customer has NOT submitted email yet, show the form!
+        const isTopUp =
+          data.deliveryType === 'topup' ||
+          (data.productName || '').toLowerCase().includes('top') ||
+          (data.productName || '').toLowerCase().includes('v-bucks') ||
+          (data.productName || '').toLowerCase().includes('coins');
+
+        if (isTopUp && !data.topUpAccountEmail) {
+          setIsEditingTopUp(true);
+        } else {
+          setIsEditingTopUp(false);
+        }
+      }
     } catch (e) {
-      console.error(e);
+      console.error('Error fetching order', e);
       setOrder(null);
     } finally {
       setLoading(false);
@@ -78,6 +114,83 @@ function OrderStatusContent() {
     setCopiedField(fieldName);
     setTimeout(() => setCopiedField(null), 2000);
   };
+
+  const handleSubmitTopUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!order) return;
+    setFormError('');
+
+    if (!formOrderNumber.trim()) {
+      setFormError('Please enter your marketplace order number (e.g. #123456).');
+      return;
+    }
+    if (!formAccountEmail.trim()) {
+      setFormError('Please enter your account email.');
+      return;
+    }
+    if (!formAccountPassword.trim()) {
+      setFormError('Please enter your account password.');
+      return;
+    }
+
+    setFormSubmitting(true);
+    try {
+      const updated = await submitTopUpRequest(order.id, {
+        topUpOrderNumber: formOrderNumber.trim(),
+        topUpPlatform: formPlatform,
+        topUpAccountEmail: formAccountEmail.trim(),
+        topUpAccountPassword: formAccountPassword.trim(),
+        topUpNotes: formNotes.trim() || undefined,
+      });
+
+      setOrder(updated);
+      setIsEditingTopUp(false);
+
+      // Notify in chat
+      try {
+        const sid = typeof window !== 'undefined' ? localStorage.getItem('imostrada_chat_session_id') || undefined : undefined;
+        await sendChatMessage({
+          sessionId: sid,
+          sender: 'user',
+          text: `[Top-Up Information Submitted] Order #${formOrderNumber.trim()} on ${formPlatform} for ${order.productName}. Email: ${formAccountEmail.trim()}`,
+          orderNumber: formOrderNumber.trim(),
+          customerLabel: `Order #${formOrderNumber.trim()}`,
+        });
+      } catch {
+        // non-blocking
+      }
+
+      // Automatically open Live Chat to guide user
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('imostrada_open_chat'));
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error submitting top-up request.';
+      setFormError(msg);
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
+  const handleOpenLiveChat = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('imostrada_open_chat'));
+    }
+    const chatBtn = document.querySelector('button[class*="LIVE CHAT SUPPORT"]') as HTMLButtonElement;
+    if (chatBtn) chatBtn.click();
+  };
+
+  // Robust check to determine if this order is a Top-Up Service
+  const isTopUpOrder = Boolean(
+    order &&
+      (order.deliveryType === 'topup' ||
+        (order.productName || '').toLowerCase().includes('top') ||
+        (order.productName || '').toLowerCase().includes('v-bucks') ||
+        (order.productName || '').toLowerCase().includes('coins') ||
+        (order.productName || '').toLowerCase().includes('points') ||
+        order.topUpAccountEmail ||
+        order.topUpOrderNumber)
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-[#060a12] text-gray-100 font-sans selection:bg-amber-400 selection:text-black">
@@ -159,11 +272,11 @@ function OrderStatusContent() {
                 </div>
               </div>
 
-              {/* Status Pill */}
-              <div>
+              {/* Status Badge */}
+              <div className="shrink-0">
                 {order.status === 'processing' && (
                   <div className="inline-flex items-center space-x-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 px-4 py-2 rounded-full text-xs font-bold shadow-[0_0_15px_rgba(245,158,11,0.15)]">
-                    <Clock className="w-4 h-4 animate-spin text-amber-400" />
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
                     <span>Processing</span>
                   </div>
                 )}
@@ -177,486 +290,625 @@ function OrderStatusContent() {
               </div>
             </div>
 
-            {/* STATUS: PROCESSING SCREEN (Account & Key Orders) */}
-            {order.status === 'processing' && order.deliveryType !== 'topup' && (
-              <div className="bg-[#07101e] border border-amber-500/30 rounded-xl p-6 text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
-                  <Clock className="w-8 h-8 animate-spin" />
-                </div>
-                <div>
-                  <h4 className="text-lg font-bold text-amber-400">Order is being processed</h4>
-                  <p className="text-xs sm:text-sm text-gray-300 mt-1 max-w-md mx-auto">
-                    Our merchant team is manually setting up your digital product.
-                  </p>
-                </div>
-
-                {/* Progress Steps */}
-                <div className="pt-4 max-w-md mx-auto text-left space-y-3">
-                  <div className="flex items-center space-x-3 text-xs">
-                    <div className="w-5 h-5 rounded-full bg-emerald-500 text-gray-950 flex items-center justify-center font-bold text-[10px]">
-                      ✓
+            {/* ============================================================== */}
+            {/* OPTION A: TOP-UP SERVICE WORKFLOW (Shows form if not submitted) */}
+            {/* ============================================================== */}
+            {isTopUpOrder ? (
+              <div className="space-y-6">
+                {/* 1. If customer needs to fill or edit the form: SHOW FORM! */}
+                {isEditingTopUp || !order.topUpAccountEmail ? (
+                  <div className="bg-[#07101e] border-2 border-amber-500/50 rounded-2xl p-6 sm:p-7 space-y-6 shadow-2xl animate-fade-in">
+                    {/* Stepper matching Screenshot 2 */}
+                    <div className="flex items-center justify-between text-xs font-semibold pb-4 border-b border-gray-800">
+                      <div className="flex items-center gap-1.5 text-emerald-400">
+                        <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500 flex items-center justify-center font-bold text-[10px]">
+                          ✓
+                        </div>
+                        <span>Redeem Code</span>
+                      </div>
+                      <div className="flex-1 h-0.5 mx-3 bg-gradient-to-r from-emerald-500 to-amber-500" />
+                      <div className="flex items-center gap-1.5 text-amber-400">
+                        <div className="w-5 h-5 rounded-full bg-amber-500 text-gray-950 flex items-center justify-center font-extrabold text-[10px]">
+                          2
+                        </div>
+                        <span className="font-bold">Fill Information</span>
+                      </div>
+                      <div className="flex-1 h-0.5 mx-3 bg-gray-800" />
+                      <div className="flex items-center gap-1.5 text-gray-500">
+                        <div className="w-5 h-5 rounded-full bg-gray-900 border border-gray-700 flex items-center justify-center font-bold text-[10px]">
+                          3
+                        </div>
+                        <span>Submit Request</span>
+                      </div>
                     </div>
-                    <span className="text-gray-300">Code Verified & Order Placed</span>
-                  </div>
-                  <div className="flex items-center space-x-3 text-xs">
-                    <div className="w-5 h-5 rounded-full bg-amber-500 text-gray-950 flex items-center justify-center font-bold text-[10px] animate-pulse">
-                      2
+
+                    {/* Form Title */}
+                    <div>
+                      <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-widest">
+                        <Coins className="w-4 h-4" />
+                        <span>TOP UP REQUEST</span>
+                      </div>
+                      <h3 className="text-xl sm:text-2xl font-extrabold text-white mt-1">
+                        Complete Your <span className="text-amber-400">Top Up Request</span>
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Please fill in the required information below so we can complete your top up as soon as possible.
+                      </p>
                     </div>
-                    <span className="text-amber-400 font-semibold">Preparation In Progress</span>
-                  </div>
-                  <div className="flex items-center space-x-3 text-xs opacity-40">
-                    <div className="w-5 h-5 rounded-full bg-gray-700 text-gray-400 flex items-center justify-center font-bold text-[10px]">
-                      3
-                    </div>
-                    <span className="text-gray-400">Credentials / Key Delivered</span>
-                  </div>
-                </div>
 
-                <div className="pt-4 text-[11px] text-gray-400 border-t border-gray-800">
-                  ⏱ Expected turnaround time: <strong>1 hour to 24 hours</strong>. You can bookmark or refresh this page anytime.
-                </div>
+                    {formError && (
+                      <div className="bg-rose-950/60 border border-rose-500/40 rounded-xl p-3.5 text-xs text-rose-300 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>{formError}</span>
+                      </div>
+                    )}
 
-                <button
-                  onClick={() => handleSearch()}
-                  className="inline-flex items-center space-x-2 text-xs bg-gray-800 hover:bg-gray-700 text-cyan-300 px-4 py-2 rounded-lg transition"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Refresh Status</span>
-                </button>
-              </div>
-            )}
+                    {/* Interactive Form */}
+                    <form onSubmit={handleSubmitTopUp} className="space-y-4 text-xs">
+                      {/* Product */}
+                      <div>
+                        <label className="text-xs font-semibold text-gray-400 block mb-1">Product</label>
+                        <div className="bg-[#050912] border border-gray-800 rounded-xl p-3 text-sm font-bold text-amber-400">
+                          {order.productName}
+                        </div>
+                      </div>
 
-            {/* STATUS: COMPLETED — OPTION 1: ACCOUNT DELIVERY (Screenshot 1) */}
-            {order.status === 'completed' && (order.deliveryType === 'account' || !order.deliveryType) && (
-              <div className="bg-[#07101e] border-2 border-emerald-500/50 rounded-2xl p-6 space-y-6 shadow-2xl relative overflow-hidden">
-                {/* Header matching Screenshot 1 */}
-                <div className="flex items-center justify-between border-b border-emerald-500/30 pb-4">
-                  <h3 className="text-xl font-black tracking-wider text-emerald-400 uppercase">
-                    CREDENTIALS
-                  </h3>
-                  <span className="text-xs font-bold text-emerald-400 border border-emerald-500/40 bg-emerald-500/10 px-4 py-1 rounded-full uppercase tracking-wider">
-                    Delivery
-                  </span>
-                </div>
+                      {/* Row 1: Order # and Platform */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-semibold text-gray-300 block mb-1.5">
+                            Order Number <span className="text-rose-400">*</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={formOrderNumber}
+                              onChange={(e) => setFormOrderNumber(e.target.value)}
+                              placeholder="Enter your order number (e.g. #123456)"
+                              className="w-full bg-[#050912] border border-gray-700 focus:border-amber-400 text-xs text-white rounded-xl py-3 pl-10 pr-3 outline-none transition"
+                              required
+                            />
+                            <ShoppingCart className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
+                          </div>
+                        </div>
 
-                {/* ✉️ ACCOUNT EMAIL */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center space-x-2">
-                    <Mail className="w-4 h-4 text-cyan-400" />
-                    <span>ACCOUNT EMAIL</span>
-                  </label>
-                  <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-xs sm:text-sm text-cyan-300 justify-between gap-2 overflow-hidden">
-                    <span className="select-all font-semibold break-all min-w-0 flex-1">{order.accountEmail || 'gamer.delivery.acc99@outlook'}</span>
-                    <button
-                      onClick={() => order.accountEmail && copyToClipboard(order.accountEmail, 'email')}
-                      className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 shrink-0 cursor-pointer active:scale-95"
-                    >
-                      {copiedField === 'email' ? (
-                        <>
-                          <Check className="w-4 h-4 text-emerald-400" />
-                          <span className="text-emerald-400 font-bold">Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
+                        <div>
+                          <label className="text-xs font-semibold text-gray-300 block mb-1.5">
+                            Platform Purchased From <span className="text-rose-400">*</span>
+                          </label>
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {(['GAMIVO', 'G2A', 'Driffle', 'Other'] as const).map((plat) => (
+                              <button
+                                key={plat}
+                                type="button"
+                                onClick={() => setFormPlatform(plat)}
+                                className={`p-2 rounded-xl border flex flex-col items-center justify-center gap-1 transition cursor-pointer ${
+                                  formPlatform === plat
+                                    ? 'border-amber-400 bg-[#16150e]'
+                                    : 'border-gray-800 bg-[#050912] text-gray-400 hover:border-gray-700'
+                                }`}
+                              >
+                                <span className={`text-[10px] font-bold ${
+                                  plat === 'GAMIVO' ? 'text-[#ff8000]' : plat === 'G2A' ? 'text-[#00a8ff]' : plat === 'Driffle' ? 'text-purple-400' : 'text-gray-300'
+                                }`}>
+                                  {plat}
+                                </span>
+                                <div
+                                  className={`w-3 h-3 rounded-full border flex items-center justify-center ${
+                                    formPlatform === plat ? 'border-amber-400 bg-amber-400' : 'border-gray-600'
+                                  }`}
+                                >
+                                  {formPlatform === plat && <div className="w-1 h-1 rounded-full bg-gray-950" />}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
 
-                {/* 🔒 ACCOUNT PASSWORD */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center space-x-2">
-                    <Lock className="w-4 h-4 text-amber-400" />
-                    <span>ACCOUNT PASSWORD</span>
-                  </label>
-                  <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-xs sm:text-sm text-amber-300 justify-between gap-2 overflow-hidden">
-                    <span className="select-all font-semibold tracking-wider break-all min-w-0 flex-1">
-                      {showPassword ? order.accountPassword : '••••••••••••'}
-                    </span>
-                    <div className="flex items-center space-x-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition text-xs flex items-center space-x-1 border border-gray-700 cursor-pointer"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                      <button
-                        onClick={() => order.accountPassword && copyToClipboard(order.accountPassword, 'password')}
-                        className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 cursor-pointer active:scale-95"
-                      >
-                        {copiedField === 'password' ? (
-                          <>
-                            <Check className="w-4 h-4 text-emerald-400" />
-                            <span className="text-emerald-400 font-bold">Copied</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-4 h-4" />
-                            <span>Copy</span>
-                          </>
+                      {/* Row 2: Account Email & Password */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-semibold text-gray-300 block mb-1.5">
+                            Account Email <span className="text-rose-400">*</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="email"
+                              value={formAccountEmail}
+                              onChange={(e) => setFormAccountEmail(e.target.value)}
+                              placeholder="Enter your account email"
+                              className="w-full bg-[#050912] border border-gray-700 focus:border-amber-400 text-xs text-cyan-300 rounded-xl py-3 pl-10 pr-3 outline-none transition font-sans"
+                              required
+                            />
+                            <Mail className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-semibold text-gray-300 block mb-1.5">
+                            Account Password <span className="text-rose-400">*</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type={formShowPassword ? 'text' : 'password'}
+                              value={formAccountPassword}
+                              onChange={(e) => setFormAccountPassword(e.target.value)}
+                              placeholder="Enter your account password"
+                              className="w-full bg-[#050912] border border-gray-700 focus:border-amber-400 text-xs text-amber-300 rounded-xl py-3 pl-10 pr-10 outline-none transition font-mono"
+                              required
+                            />
+                            <Lock className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
+                            <button
+                              type="button"
+                              onClick={() => setFormShowPassword(!formShowPassword)}
+                              className="absolute right-3 top-3 text-gray-500 hover:text-gray-300 transition cursor-pointer"
+                            >
+                              {formShowPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Additional Notes */}
+                      <div>
+                        <label className="text-xs font-semibold text-gray-300 block mb-1.5">
+                          Additional Information (Optional)
+                        </label>
+                        <div className="relative">
+                          <textarea
+                            value={formNotes}
+                            onChange={(e) => {
+                              if (e.target.value.length <= 500) setFormNotes(e.target.value);
+                            }}
+                            rows={2}
+                            placeholder="Any additional details that may help us process your top up request."
+                            className="w-full bg-[#050912] border border-gray-700 focus:border-amber-400 text-xs text-gray-200 rounded-xl py-2.5 pl-10 pr-3 outline-none transition font-sans"
+                          />
+                          <MessageSquare className="w-4 h-4 text-gray-500 absolute left-3.5 top-3" />
+                          <span className="absolute right-3 bottom-2.5 text-[10px] text-gray-500 font-mono">
+                            {formNotes.length}/500
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Alert Box */}
+                      <div className="bg-[#0b1b30] border border-cyan-500/30 rounded-xl p-3.5 flex items-start gap-3 text-cyan-200">
+                        <div className="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
+                          <MessageSquare className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-white text-xs">Next Step: Contact Live Chat</h4>
+                          <p className="text-[11px] text-cyan-200/80 leading-relaxed">
+                            After submitting this form, please contact our Live Chat immediately to confirm your top up.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Submit button */}
+                      <div className="flex gap-2 pt-2">
+                        {order.topUpAccountEmail && (
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingTopUp(false)}
+                            className="py-3 px-5 rounded-xl bg-gray-800 text-gray-300 font-semibold transition hover:bg-gray-700 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
                         )}
-                      </button>
-                    </div>
+                        <button
+                          type="submit"
+                          disabled={formSubmitting}
+                          className="flex-1 py-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-gray-950 font-black text-xs sm:text-sm uppercase tracking-wider transition shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        >
+                          <Send className="w-4 h-4 text-gray-950" />
+                          <span>{formSubmitting ? 'Submitting Request...' : 'SUBMIT REQUEST →'}</span>
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                </div>
-
-                {/* 🛡️ 2FA KEY (Matching Screenshot 1) */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center space-x-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span>2FA KEY</span>
-                  </label>
-                  <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-xs sm:text-sm text-cyan-400 justify-between gap-2 overflow-hidden">
-                    <span className="select-all font-semibold tracking-wider break-all min-w-0 flex-1">
-                      {order.twoFactorKey || 'JBSWY3DPEHPK3PXP'}
-                    </span>
-                    <button
-                      onClick={() => copyToClipboard(order.twoFactorKey || 'JBSWY3DPEHPK3PXP', '2fa')}
-                      className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 shrink-0 cursor-pointer active:scale-95"
-                    >
-                      {copiedField === '2fa' ? (
-                        <>
-                          <Check className="w-4 h-4 text-emerald-400" />
-                          <span className="text-emerald-400 font-bold">Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Amber 2FA Note box from Screenshot 1 */}
-                  <div className="bg-[#181305] border border-amber-500/40 rounded-xl p-4 text-xs text-amber-300 space-y-1">
-                    <div className="flex items-center space-x-2 font-bold text-amber-400 text-sm">
-                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                      <span>Important Note:</span>
-                    </div>
-                    <p className="text-amber-200/90 pl-6 leading-relaxed">
-                      Add this 2FA key to <strong>Google Authenticator</strong> or any authenticator app or use this website:
-                    </p>
-                    <div className="pl-6 pt-1">
-                      <a
-                        href="https://2fa.co.com/"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center space-x-1.5 text-cyan-400 hover:text-cyan-300 underline font-medium"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        <span>https://2fa.co.com/</span>
-                      </a>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 📝 LOGIN INSTRUCTIONS & NOTES */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center space-x-2">
-                    <FileText className="w-4 h-4 text-emerald-400" />
-                    <span>LOGIN INSTRUCTIONS & NOTES</span>
-                  </label>
-                  <div className="bg-[#040810] p-4 sm:p-5 rounded-xl border border-gray-800 text-xs sm:text-sm text-gray-300 leading-relaxed font-sans whitespace-pre-wrap">
-                    {order.instructions ||
-                      '1. Open Xbox app or console.\n2. Add new account using the email and password above.\n3. Add the 2FA key to Google Authenticator or any authenticator app (https://2fa.co.com/).\n4. Set as Home Xbox to share subscription features across all profiles.\n5. Enjoy gaming!'}
-                  </div>
-                </div>
-
-                {/* Bottom COPY ALL button matching Screenshot 1 */}
-                <button
-                  onClick={() => {
-                    const fullText = `Account Email: ${order.accountEmail || 'gamer.delivery.acc99@outlook'}\nAccount Password: ${order.accountPassword}\n2FA Key: ${order.twoFactorKey || 'JBSWY3DPEHPK3PXP'}\nInstructions: ${order.instructions || ''}`;
-                    copyToClipboard(fullText, 'all');
-                  }}
-                  className="w-full py-3.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-black text-xs sm:text-sm uppercase tracking-wider transition flex items-center justify-center space-x-2 border border-gray-700 cursor-pointer shadow-lg"
-                >
-                  {copiedField === 'all' ? (
-                    <>
-                      <Check className="w-5 h-5 text-emerald-400" />
-                      <span className="text-emerald-400">ALL ACCOUNT DETAILS COPIED</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-5 h-5" />
-                      <span>COPY ALL ACCOUNT DETAILS</span>
-                    </>
-                  )}
-                </button>
-
-                {/* 🎁 Thank You & Review Box */}
-                <div className="bg-gradient-to-r from-emerald-950/40 via-[#071424] to-cyan-950/40 border border-emerald-500/40 rounded-xl p-5 text-xs text-gray-200 space-y-2 shadow-lg">
-                  <div className="font-bold text-amber-400 text-sm">
-                    🎁 Thank You for Your Purchase! ❤️
-                  </div>
-                  <p className="text-gray-300 leading-relaxed font-medium">
-                    We truly appreciate your trust and support! 🙏
-                  </p>
-                  <p className="text-gray-300 leading-relaxed font-medium">
-                    If you are satisfied with your order, we would be very grateful if you could leave us a positive review ⭐ on the platform where you purchased from.
-                  </p>
-                  <p className="text-emerald-400 font-bold leading-relaxed pt-1">
-                    Your feedback means a lot to us and helps us grow and continue providing the best service! 💚
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* STATUS: COMPLETED — OPTION 2: PRODUCT KEY DELIVERY (Screenshot 3) */}
-            {order.status === 'completed' && order.deliveryType === 'key' && (
-              <div className="bg-[#07101e] border-2 border-emerald-500/50 rounded-2xl p-6 space-y-6 shadow-2xl relative overflow-hidden">
-                {/* Header matching Screenshot 3 */}
-                <div className="flex items-center justify-between border-b border-emerald-500/30 pb-4">
-                  <h3 className="text-xl font-black tracking-wider text-emerald-400 uppercase">
-                    PRODUCT KEY
-                  </h3>
-                  <span className="text-xs font-bold text-emerald-400 border border-emerald-500/40 bg-emerald-500/10 px-4 py-1 rounded-full uppercase tracking-wider">
-                    Delivery
-                  </span>
-                </div>
-
-                {/* 🔑 PRODUCT KEY */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center space-x-2">
-                    <Key className="w-4 h-4 text-emerald-400" />
-                    <span>PRODUCT KEY</span>
-                  </label>
-                  <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3.5 sm:p-4 font-mono text-base sm:text-lg text-cyan-300 justify-between gap-2">
-                    <span className="select-all font-bold tracking-widest">
-                      {order.productKey || 'JBSWY3DPEHPK3PXP'}
-                    </span>
-                    <button
-                      onClick={() => copyToClipboard(order.productKey || 'JBSWY3DPEHPK3PXP', 'key')}
-                      className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 hover:text-white transition flex items-center space-x-2 text-xs font-bold border border-gray-700 shrink-0"
-                    >
-                      {copiedField === 'key' ? (
-                        <>
-                          <Check className="w-4 h-4 text-emerald-400" />
-                          <span className="text-emerald-400 font-bold">Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Amber Key Note Box from Screenshot 3 */}
-                <div className="bg-[#181305] border border-amber-500/40 rounded-xl p-4 text-xs text-amber-300 space-y-1">
-                  <div className="flex items-center space-x-2 font-bold text-amber-400 text-sm">
-                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span>Important Note:</span>
-                  </div>
-                  <p className="text-amber-200/90 pl-6 leading-relaxed">
-                    This is your product key. Redeem it on Xbox/Microsoft Store to activate your product.
-                  </p>
-                </div>
-
-                {/* Bottom COPY PRODUCT KEY button matching Screenshot 3 */}
-                <button
-                  onClick={() => copyToClipboard(order.productKey || 'JBSWY3DPEHPK3PXP', 'all-key')}
-                  className="w-full py-3.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-white font-black text-xs sm:text-sm uppercase tracking-wider transition flex items-center justify-center space-x-2 border border-gray-700 cursor-pointer shadow-lg"
-                >
-                  {copiedField === 'all-key' ? (
-                    <>
-                      <Check className="w-5 h-5 text-emerald-400" />
-                      <span className="text-emerald-400">PRODUCT KEY COPIED TO CLIPBOARD</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-5 h-5" />
-                      <span>COPY PRODUCT KEY</span>
-                    </>
-                  )}
-                </button>
-
-                {/* 🎁 Thank You & Review Box */}
-                <div className="bg-gradient-to-r from-emerald-950/40 via-[#071424] to-cyan-950/40 border border-emerald-500/40 rounded-xl p-5 text-xs text-gray-200 space-y-2 shadow-lg">
-                  <div className="font-bold text-amber-400 text-sm">
-                    🎁 Thank You for Your Purchase! ❤️
-                  </div>
-                  <p className="text-gray-300 leading-relaxed font-medium">
-                    We truly appreciate your trust and support! 🙏
-                  </p>
-                  <p className="text-gray-300 leading-relaxed font-medium">
-                    If you are satisfied with your order, we would be very grateful if you could leave us a positive review ⭐ on the platform where you purchased from.
-                  </p>
-                  <p className="text-emerald-400 font-bold leading-relaxed pt-1">
-                    Your feedback means a lot to us and helps us grow and continue providing the best service! 💚
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* STATUS: OPTION 3: TOP-UP SERVICE DELIVERY (Screenshot 2 workflow) */}
-            {order.deliveryType === 'topup' && (
-              <div className="bg-[#07101e] border-2 border-amber-500/50 rounded-2xl p-6 space-y-6 shadow-2xl relative overflow-hidden">
-                {/* Header matching Screenshot 2 style */}
-                <div className="flex items-center justify-between border-b border-amber-500/30 pb-4">
-                  <div className="flex items-center space-x-2">
-                    <Coins className="w-5 h-5 text-amber-400" />
-                    <h3 className="text-xl font-black tracking-wider text-amber-400 uppercase">
-                      TOP-UP REQUEST
-                    </h3>
-                  </div>
-                  <span
-                    className={`text-xs font-bold px-4 py-1 rounded-full uppercase tracking-wider border ${
-                      order.status === 'completed'
-                        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-                        : 'border-amber-500/40 bg-amber-500/10 text-amber-400 animate-pulse'
-                    }`}
-                  >
-                    {order.status === 'completed' ? 'Completed' : 'Processing'}
-                  </span>
-                </div>
-
-                {/* Submitted Top-Up Details Card */}
-                <div className="bg-[#09111d] border border-gray-800 rounded-xl p-5 space-y-3.5 text-xs">
-                  <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
-                    <span className="text-gray-400 font-semibold">Service Product:</span>
-                    <span className="font-bold text-white text-sm">{order.productName}</span>
-                  </div>
-
-                  {order.topUpOrderNumber && (
-                    <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
-                      <span className="text-gray-400 font-semibold">Order Number:</span>
-                      <span className="font-mono font-bold text-amber-400 text-sm">
-                        {order.topUpOrderNumber}
-                      </span>
-                    </div>
-                  )}
-
-                  {order.topUpPlatform && (
-                    <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
-                      <span className="text-gray-400 font-semibold">Platform Purchased From:</span>
-                      <span className="font-bold text-cyan-400 px-2.5 py-0.5 rounded-full bg-cyan-950/40 border border-cyan-800/60">
-                        {order.topUpPlatform}
-                      </span>
-                    </div>
-                  )}
-
-                  {order.topUpAccountEmail && (
-                    <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
-                      <span className="text-gray-400 font-semibold">Account Email:</span>
+                ) : (
+                  /* 2. Customer has already submitted information: SHOW SUBMITTED SUMMARY! */
+                  <div className="bg-[#07101e] border-2 border-amber-500/50 rounded-2xl p-6 space-y-5 shadow-2xl relative overflow-hidden animate-fade-in">
+                    <div className="flex items-center justify-between border-b border-amber-500/30 pb-4">
                       <div className="flex items-center space-x-2">
-                        <span className="font-mono text-cyan-300 font-semibold break-all">
-                          {order.topUpAccountEmail}
+                        <Coins className="w-5 h-5 text-amber-400" />
+                        <h3 className="text-xl font-black tracking-wider text-amber-400 uppercase">
+                          TOP-UP REQUEST
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setIsEditingTopUp(true)}
+                          className="text-xs bg-gray-800 hover:bg-gray-700 text-cyan-300 px-3 py-1 rounded-lg border border-gray-700 flex items-center gap-1 cursor-pointer transition"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Edit Details</span>
+                        </button>
+                        <span
+                          className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider border ${
+                            order.status === 'completed'
+                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                              : 'border-amber-500/40 bg-amber-500/10 text-amber-400 animate-pulse'
+                          }`}
+                        >
+                          {order.status === 'completed' ? 'Completed' : 'Processing'}
                         </span>
-                        <button
-                          onClick={() => copyToClipboard(order.topUpAccountEmail!, 'topup-email')}
-                          className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-semibold border border-gray-700 shrink-0 cursor-pointer"
-                        >
-                          {copiedField === 'topup-email' ? 'Copied' : 'Copy'}
-                        </button>
                       </div>
                     </div>
-                  )}
 
-                  {order.topUpAccountPassword && (
-                    <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
-                      <span className="text-gray-400 font-semibold">Account Password:</span>
-                      <div className="flex items-center space-x-2">
-                        <span className="font-mono text-amber-300 font-semibold break-all">
-                          {showPassword ? order.topUpAccountPassword : '••••••••••••'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] border border-gray-700 cursor-pointer"
-                        >
-                          {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                        <button
-                          onClick={() => copyToClipboard(order.topUpAccountPassword!, 'topup-pass')}
-                          className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-semibold border border-gray-700 shrink-0 cursor-pointer"
-                        >
-                          {copiedField === 'topup-pass' ? 'Copied' : 'Copy'}
-                        </button>
+                    {/* Submitted Details Card */}
+                    <div className="bg-[#09111d] border border-gray-800 rounded-xl p-5 space-y-3.5 text-xs">
+                      <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
+                        <span className="text-gray-400 font-semibold">Service Product:</span>
+                        <span className="font-bold text-white text-sm">{order.productName}</span>
                       </div>
-                    </div>
-                  )}
 
-                  {order.topUpNotes && (
-                    <div className="pt-1">
-                      <span className="text-gray-400 font-semibold block mb-1">Additional Notes:</span>
-                      <div className="bg-[#050912] p-3 rounded-lg border border-gray-800 text-gray-300 leading-relaxed font-sans whitespace-pre-wrap">
-                        {order.topUpNotes}
+                      {order.topUpOrderNumber && (
+                        <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
+                          <span className="text-gray-400 font-semibold">Order Number:</span>
+                          <div className="flex items-center space-x-1">
+                            <span className="font-mono font-bold text-amber-400 text-sm">
+                              {order.topUpOrderNumber}
+                            </span>
+                            <button
+                              onClick={() => copyToClipboard(order.topUpOrderNumber!, 'orderNo')}
+                              className="p-1 text-gray-400 hover:text-white"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {order.topUpPlatform && (
+                        <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
+                          <span className="text-gray-400 font-semibold">Platform Purchased From:</span>
+                          <span className="font-bold text-cyan-400 px-2.5 py-0.5 rounded-full bg-cyan-950/40 border border-cyan-800/60">
+                            {order.topUpPlatform}
+                          </span>
+                        </div>
+                      )}
+
+                      {order.topUpAccountEmail && (
+                        <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
+                          <span className="text-gray-400 font-semibold">Account Email:</span>
+                          <div className="flex items-center space-x-2">
+                            <span className="font-mono text-cyan-300 font-semibold break-all">
+                              {order.topUpAccountEmail}
+                            </span>
+                            <button
+                              onClick={() => copyToClipboard(order.topUpAccountEmail!, 'topup-email')}
+                              className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-semibold border border-gray-700 shrink-0 cursor-pointer"
+                            >
+                              {copiedField === 'topup-email' ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {order.topUpAccountPassword && (
+                        <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
+                          <span className="text-gray-400 font-semibold">Account Password:</span>
+                          <div className="flex items-center space-x-2">
+                            <span className="font-mono text-amber-300 font-semibold break-all">
+                              {showPassword ? order.topUpAccountPassword : '••••••••••••'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] border border-gray-700 cursor-pointer"
+                            >
+                              {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              onClick={() => copyToClipboard(order.topUpAccountPassword!, 'topup-pass')}
+                              className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-semibold border border-gray-700 shrink-0 cursor-pointer"
+                            >
+                              {copiedField === 'topup-pass' ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {order.topUpNotes && (
+                        <div className="pt-1">
+                          <span className="text-gray-400 font-semibold block mb-1">Additional Notes:</span>
+                          <div className="bg-[#050912] p-3 rounded-lg border border-gray-800 text-gray-300 leading-relaxed font-sans whitespace-pre-wrap">
+                            {order.topUpNotes}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Alert to contact Live Chat immediately */}
+                    {order.status === 'processing' && (
+                      <div className="bg-[#081a2e] border-2 border-cyan-500/50 rounded-xl p-5 space-y-3 shadow-lg">
+                        <div className="flex items-center space-x-2 text-cyan-400 font-bold text-sm">
+                          <MessageSquare className="w-5 h-5 text-cyan-400 shrink-0" />
+                          <span>Next Step: Contact Live Chat</span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-cyan-200/90 leading-relaxed">
+                          Your top-up request has been registered in our queue. <strong>Please contact our Live Chat immediately</strong> to confirm your top-up details and let the agent begin processing your account.
+                        </p>
+                        <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                          <button
+                            onClick={handleOpenLiveChat}
+                            className="py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-gray-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-2 shadow-md transition cursor-pointer"
+                          >
+                            <MessageSquare className="w-4 h-4 text-gray-950" />
+                            <span>Open Live Chat Now</span>
+                          </button>
+                          <button
+                            onClick={() => setIsEditingTopUp(true)}
+                            className="py-2.5 px-4 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white font-semibold text-xs flex items-center justify-center space-x-1.5 border border-gray-700 transition cursor-pointer"
+                          >
+                            <span>Edit Submitted Information</span>
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
 
-                {/* If PROCESSING: Alert to contact Live Chat immediately (matching user screenshot) */}
+                    {/* Completed State */}
+                    {order.status === 'completed' && (
+                      <div className="bg-[#061e12] border-2 border-emerald-500/50 rounded-xl p-5 space-y-3">
+                        <div className="flex items-center space-x-2 text-emerald-400 font-bold text-sm">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                          <span>Top-Up Successfully Completed!</span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-emerald-200/90 leading-relaxed">
+                          Our fulfillment team has completed your top-up request. Please open your game or console to verify your added currency/items.
+                        </p>
+                        {order.instructions && (
+                          <div className="bg-[#04120a] p-3.5 rounded-lg border border-emerald-900/60 text-xs text-gray-200 leading-relaxed whitespace-pre-wrap">
+                            {order.instructions}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Review Box */}
+                    <div className="bg-gradient-to-r from-emerald-950/40 via-[#071424] to-cyan-950/40 border border-emerald-500/40 rounded-xl p-5 text-xs text-gray-200 space-y-2 shadow-lg">
+                      <div className="font-bold text-amber-400 text-sm">
+                        🎁 Thank You for Your Purchase! ❤️
+                      </div>
+                      <p className="text-gray-300 leading-relaxed font-medium">
+                        We truly appreciate your trust and support! 🙏
+                      </p>
+                      <p className="text-gray-300 leading-relaxed font-medium">
+                        If you are satisfied with your top-up order, we would be very grateful if you could leave us a positive review ⭐ on the platform where you purchased from.
+                      </p>
+                      <p className="text-emerald-400 font-bold leading-relaxed pt-1">
+                        Your feedback means a lot to us and helps us grow and continue providing the best service! 💚
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* ============================================================== */
+              /* OPTION B: STANDARD ACCOUNT / KEY ORDER WORKFLOW                */
+              /* ============================================================== */
+              <div className="space-y-6">
+                {/* STATUS: PROCESSING SCREEN (Account & Key Orders ONLY) */}
                 {order.status === 'processing' && (
-                  <div className="bg-[#081a2e] border-2 border-cyan-500/50 rounded-xl p-5 space-y-3 shadow-lg">
-                    <div className="flex items-center space-x-2 text-cyan-400 font-bold text-sm">
-                      <MessageSquare className="w-5 h-5 text-cyan-400 shrink-0" />
-                      <span>Next Step: Contact Live Chat</span>
+                  <div className="bg-[#07101e] border border-amber-500/30 rounded-xl p-6 text-center space-y-4">
+                    <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+                      <Clock className="w-8 h-8 animate-spin" />
                     </div>
-                    <p className="text-xs sm:text-sm text-cyan-200/90 leading-relaxed">
-                      Your top-up request has been registered in our queue. <strong>Please contact our Live Chat immediately</strong> to confirm your top-up details and let the agent begin processing your account.
-                    </p>
-                    <div className="pt-2 flex flex-col sm:flex-row gap-2">
-                      <button
-                        onClick={() => {
-                          const chatBtn = document.querySelector('button[class*="LIVE CHAT SUPPORT"]') as HTMLButtonElement;
-                          if (chatBtn) chatBtn.click();
-                        }}
-                        className="py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-gray-950 font-black text-xs uppercase tracking-wider flex items-center justify-center space-x-2 shadow-md transition cursor-pointer"
-                      >
-                        <MessageSquare className="w-4 h-4 text-gray-950" />
-                        <span>Open Live Chat Now</span>
-                      </button>
-                      <button
-                        onClick={() => router.push(`/topup?code=${encodeURIComponent(order.code)}`)}
-                        className="py-2.5 px-4 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white font-semibold text-xs flex items-center justify-center space-x-1.5 border border-gray-700 transition cursor-pointer"
-                      >
-                        <span>Edit Submitted Information</span>
-                      </button>
+                    <div>
+                      <h4 className="text-lg font-bold text-amber-400">Order is being processed</h4>
+                      <p className="text-xs sm:text-sm text-gray-300 mt-1 max-w-md mx-auto">
+                        Our merchant team is manually setting up your digital product.
+                      </p>
+                    </div>
+
+                    <div className="pt-4 max-w-md mx-auto text-left space-y-3">
+                      <div className="flex items-center space-x-3 text-xs">
+                        <div className="w-5 h-5 rounded-full bg-emerald-500 text-gray-950 flex items-center justify-center font-bold text-[10px]">
+                          ✓
+                        </div>
+                        <span className="text-gray-300">Code Verified & Order Placed</span>
+                      </div>
+                      <div className="flex items-center space-x-3 text-xs">
+                        <div className="w-5 h-5 rounded-full bg-amber-500 text-gray-950 flex items-center justify-center font-bold text-[10px] animate-pulse">
+                          2
+                        </div>
+                        <span className="text-amber-400 font-semibold">Preparation In Progress</span>
+                      </div>
+                      <div className="flex items-center space-x-3 text-xs opacity-40">
+                        <div className="w-5 h-5 rounded-full bg-gray-700 text-gray-400 flex items-center justify-center font-bold text-[10px]">
+                          3
+                        </div>
+                        <span className="text-gray-400">Credentials / Key Delivered</span>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 text-[11px] text-gray-400 border-t border-gray-800">
+                      ⏱ Expected turnaround time: <strong>1 hour to 24 hours</strong>. You can bookmark or refresh this page anytime.
+                    </div>
+
+                    <button
+                      onClick={() => handleSearch()}
+                      className="inline-flex items-center space-x-2 text-xs bg-gray-800 hover:bg-gray-700 text-cyan-300 px-4 py-2 rounded-lg transition cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Refresh Status</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* COMPLETED: ACCOUNT CREDENTIALS DELIVERY */}
+                {order.status === 'completed' && order.deliveryType === 'account' && (
+                  <div className="bg-[#07101e] border-2 border-emerald-500/50 rounded-2xl p-6 space-y-6 shadow-2xl relative overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-emerald-500/30 pb-4">
+                      <h3 className="text-xl font-black tracking-wider text-emerald-400 uppercase">
+                        CREDENTIALS
+                      </h3>
+                      <span className="text-xs font-bold text-emerald-400 border border-emerald-500/40 bg-emerald-500/10 px-4 py-1 rounded-full uppercase tracking-wider">
+                        Delivery
+                      </span>
+                    </div>
+
+                    {/* Account Email */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center space-x-2">
+                        <Mail className="w-4 h-4 text-cyan-400" />
+                        <span>ACCOUNT EMAIL</span>
+                      </label>
+                      <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-xs sm:text-sm text-cyan-300 justify-between gap-2 overflow-hidden">
+                        <span className="select-all font-semibold break-all min-w-0 flex-1">
+                          {order.accountEmail || 'gamer.delivery.acc99@outlook.com'}
+                        </span>
+                        <button
+                          onClick={() => order.accountEmail && copyToClipboard(order.accountEmail, 'email')}
+                          className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 shrink-0 cursor-pointer active:scale-95"
+                        >
+                          {copiedField === 'email' ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Account Password */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center space-x-2">
+                        <Lock className="w-4 h-4 text-cyan-400" />
+                        <span>ACCOUNT PASSWORD</span>
+                      </label>
+                      <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-xs sm:text-sm text-amber-300 justify-between gap-2">
+                        <span className="select-all font-bold tracking-wider">
+                          {showPassword ? order.accountPassword : '••••••••••••'}
+                        </span>
+                        <div className="flex items-center space-x-2 shrink-0">
+                          <button
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition border border-gray-700 cursor-pointer"
+                          >
+                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                          <button
+                            onClick={() => order.accountPassword && copyToClipboard(order.accountPassword, 'pass')}
+                            className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 cursor-pointer"
+                          >
+                            {copiedField === 'pass' ? 'Copied' : 'Copy'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2FA Key */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center space-x-2">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        <span>2FA KEY</span>
+                      </label>
+                      <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-xs sm:text-sm text-cyan-400 justify-between gap-2 overflow-hidden">
+                        <span className="select-all font-semibold tracking-wider break-all min-w-0 flex-1">
+                          {order.twoFactorKey || 'JBSWY3DPEHPK3PXP'}
+                        </span>
+                        <button
+                          onClick={() => copyToClipboard(order.twoFactorKey || 'JBSWY3DPEHPK3PXP', '2fa')}
+                          className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 shrink-0 cursor-pointer"
+                        >
+                          {copiedField === '2fa' ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+
+                      <div className="bg-[#181305] border border-amber-500/40 rounded-xl p-4 text-xs text-amber-300 space-y-1">
+                        <div className="flex items-center space-x-2 font-bold text-amber-400 text-sm">
+                          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span>Important Note:</span>
+                        </div>
+                        <p className="text-amber-200/90 pl-6 leading-relaxed">
+                          Add this 2FA key to <strong>Google Authenticator</strong> or any authenticator app or use this website:
+                        </p>
+                        <div className="pl-6 pt-1">
+                          <a
+                            href="https://2fa.co.com/"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center space-x-1.5 text-cyan-400 hover:text-cyan-300 underline font-medium"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>https://2fa.co.com/</span>
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Instructions */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center space-x-2">
+                        <FileText className="w-4 h-4 text-emerald-400" />
+                        <span>LOGIN INSTRUCTIONS & NOTES</span>
+                      </label>
+                      <div className="bg-[#040810] p-4 sm:p-5 rounded-xl border border-gray-800 text-xs sm:text-sm text-gray-300 leading-relaxed font-sans whitespace-pre-wrap">
+                        {order.instructions ||
+                          '1. Open console or app.\n2. Add new account using the credentials above.\n3. Verify with 2FA key if required.\n4. Enjoy gaming!'}
+                      </div>
+                    </div>
+
+                    {/* Review Box */}
+                    <div className="bg-gradient-to-r from-emerald-950/40 via-[#071424] to-cyan-950/40 border border-emerald-500/40 rounded-xl p-5 text-xs text-gray-200 space-y-2 shadow-lg">
+                      <div className="font-bold text-amber-400 text-sm">
+                        🎁 Thank You for Your Purchase! ❤️
+                      </div>
+                      <p className="text-gray-300 leading-relaxed font-medium">
+                        We truly appreciate your trust and support! 🙏
+                      </p>
+                      <p className="text-gray-300 leading-relaxed font-medium">
+                        If you are satisfied with your order, we would be very grateful if you could leave us a positive review ⭐ on the platform where you purchased from.
+                      </p>
                     </div>
                   </div>
                 )}
 
-                {/* If COMPLETED: Confirmation and Instructions */}
-                {order.status === 'completed' && (
-                  <div className="bg-[#061e12] border-2 border-emerald-500/50 rounded-xl p-5 space-y-3">
-                    <div className="flex items-center space-x-2 text-emerald-400 font-bold text-sm">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                      <span>Top-Up Successfully Added to Account!</span>
+                {/* COMPLETED: PRODUCT KEY DELIVERY */}
+                {order.status === 'completed' && order.deliveryType === 'key' && (
+                  <div className="bg-[#07101e] border-2 border-emerald-500/50 rounded-2xl p-6 space-y-6 shadow-2xl relative overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-emerald-500/30 pb-4">
+                      <h3 className="text-xl font-black tracking-wider text-emerald-400 uppercase">
+                        PRODUCT KEY
+                      </h3>
+                      <span className="text-xs font-bold text-emerald-400 border border-emerald-500/40 bg-emerald-500/10 px-4 py-1 rounded-full uppercase tracking-wider">
+                        Delivery
+                      </span>
                     </div>
-                    <p className="text-xs sm:text-sm text-emerald-200/90 leading-relaxed">
-                      Our fulfillment team has completed your top-up request. Please open your game or console to verify your added currency/items.
-                    </p>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center space-x-2">
+                        <Key className="w-4 h-4 text-emerald-400" />
+                        <span>PRODUCT KEY</span>
+                      </label>
+                      <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3.5 sm:p-4 font-mono text-base sm:text-lg text-cyan-300 justify-between gap-2">
+                        <span className="select-all font-bold tracking-widest">
+                          {order.productKey || 'JBSWY3DPEHPK3PXP'}
+                        </span>
+                        <button
+                          onClick={() => copyToClipboard(order.productKey || 'JBSWY3DPEHPK3PXP', 'key')}
+                          className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 hover:text-white transition flex items-center space-x-2 text-xs font-bold border border-gray-700 shrink-0 cursor-pointer"
+                        >
+                          {copiedField === 'key' ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                    </div>
+
                     {order.instructions && (
-                      <div className="bg-[#04120a] p-3.5 rounded-lg border border-emerald-900/60 text-xs text-gray-200 leading-relaxed whitespace-pre-wrap">
+                      <div className="bg-[#040810] p-4 rounded-xl border border-gray-800 text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">
                         {order.instructions}
                       </div>
                     )}
+
+                    <div className="bg-gradient-to-r from-emerald-950/40 via-[#071424] to-cyan-950/40 border border-emerald-500/40 rounded-xl p-5 text-xs text-gray-200 space-y-2 shadow-lg">
+                      <div className="font-bold text-amber-400 text-sm">
+                        🎁 Thank You for Your Purchase! ❤️
+                      </div>
+                      <p className="text-gray-300 leading-relaxed font-medium">
+                        We truly appreciate your trust and support! 🙏
+                      </p>
+                    </div>
                   </div>
                 )}
-
-                {/* 🎁 Thank You Box on Top-Up orders */}
-                <div className="bg-gradient-to-r from-emerald-950/40 via-[#071424] to-cyan-950/40 border border-emerald-500/40 rounded-xl p-5 text-xs text-gray-200 space-y-2 shadow-lg">
-                  <div className="font-bold text-amber-400 text-sm">
-                    🎁 Thank You for Your Purchase! ❤️
-                  </div>
-                  <p className="text-gray-300 leading-relaxed font-medium">
-                    We truly appreciate your trust and support! 🙏
-                  </p>
-                  <p className="text-gray-300 leading-relaxed font-medium">
-                    If you are satisfied with your top-up order, we would be very grateful if you could leave us a positive review ⭐ on the platform where you purchased from.
-                  </p>
-                  <p className="text-emerald-400 font-bold leading-relaxed pt-1">
-                    Your feedback means a lot to us and helps us grow and continue providing the best service! 💚
-                  </p>
-                </div>
               </div>
             )}
           </div>
@@ -665,13 +917,20 @@ function OrderStatusContent() {
 
       <TermsModal isOpen={isTermsOpen} onClose={() => setIsTermsOpen(false)} />
       <Footer onOpenTerms={() => setIsTermsOpen(true)} />
+      <LiveChatWidget />
     </div>
   );
 }
 
 export default function OrderStatusPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#060a12] text-white flex items-center justify-center">Loading...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#060a12] flex items-center justify-center text-amber-400 text-sm">
+          Loading Order Status...
+        </div>
+      }
+    >
       <OrderStatusContent />
     </Suspense>
   );

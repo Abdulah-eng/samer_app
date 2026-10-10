@@ -84,11 +84,16 @@ ALTER TABLE orders ADD CONSTRAINT orders_delivery_type_check CHECK (delivery_typ
 -- 4. LIVE CHAT MESSAGES TABLE
 CREATE TABLE IF NOT EXISTS chat_messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id TEXT DEFAULT 'general',
   sender TEXT NOT NULL CHECK (sender IN ('user', 'agent')),
   text TEXT NOT NULL,
   order_number TEXT,
+  customer_label TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS session_id TEXT DEFAULT 'general';
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS customer_label TEXT;
 
 -- 5. STORE SETTINGS TABLE
 CREATE TABLE IF NOT EXISTS store_settings (

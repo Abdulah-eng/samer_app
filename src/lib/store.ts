@@ -458,32 +458,70 @@ export async function getOrders(): Promise<Order[]> {
   if (isSupabaseConfigured && supabase) {
     const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
     if (!error && data) {
-      return data.map((item) => ({
-        id: item.id,
-        orderNumber: item.order_number,
-        code: item.code,
-        productId: item.product_id,
-        productName: item.product_name,
-        status: item.status,
-        deliveryType: (item.delivery_type as DeliveryType) || 'account',
-        accountEmail: item.account_email,
-        accountPassword: item.account_password,
-        twoFactorKey: item.two_factor_key,
-        productKey: item.product_key,
-        topUpOrderNumber: item.top_up_order_number,
-        topUpPlatform: item.top_up_platform,
-        topUpAccountEmail: item.top_up_account_email,
-        topUpAccountPassword: item.top_up_account_password,
-        topUpNotes: item.top_up_notes,
-        topUpSubmittedAt: item.top_up_submitted_at,
-        instructions: item.instructions,
-        customerIp: item.customer_ip,
-        createdAt: item.created_at,
-        updatedAt: item.updated_at,
-      }));
+      return data.map((item) => {
+        let dType: DeliveryType = (item.delivery_type as DeliveryType) || 'account';
+        const pLower = (item.product_name || '').toLowerCase();
+        if (
+          dType === 'topup' ||
+          pLower.includes('top up') ||
+          pLower.includes('top-up') ||
+          pLower.includes('v-bucks') ||
+          pLower.includes('coins') ||
+          pLower.includes('points') ||
+          item.top_up_account_email ||
+          item.top_up_order_number
+        ) {
+          dType = 'topup';
+        } else if (dType !== 'account' || pLower.includes('key') || pLower.includes('code')) {
+          if (item.product_key || pLower.includes('key')) {
+            dType = 'key';
+          }
+        }
+
+        return {
+          id: item.id,
+          orderNumber: item.order_number,
+          code: item.code,
+          productId: item.product_id,
+          productName: item.product_name,
+          status: item.status,
+          deliveryType: dType,
+          accountEmail: item.account_email,
+          accountPassword: item.account_password,
+          twoFactorKey: item.two_factor_key,
+          productKey: item.product_key,
+          topUpOrderNumber: item.top_up_order_number,
+          topUpPlatform: item.top_up_platform,
+          topUpAccountEmail: item.top_up_account_email,
+          topUpAccountPassword: item.top_up_account_password,
+          topUpNotes: item.top_up_notes,
+          topUpSubmittedAt: item.top_up_submitted_at,
+          instructions: item.instructions,
+          customerIp: item.customer_ip,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+        };
+      });
     }
   }
-  return getLocal<Order[]>(STORAGE_KEYS.ORDERS, INITIAL_ORDERS);
+
+  const localOrders = getLocal<Order[]>(STORAGE_KEYS.ORDERS, INITIAL_ORDERS);
+  return localOrders.map((o) => {
+    let dType = o.deliveryType || 'account';
+    const pLower = (o.productName || '').toLowerCase();
+    if (
+      dType === 'topup' ||
+      pLower.includes('top up') ||
+      pLower.includes('top-up') ||
+      pLower.includes('v-bucks') ||
+      pLower.includes('coins') ||
+      o.topUpAccountEmail ||
+      o.topUpOrderNumber
+    ) {
+      dType = 'topup';
+    }
+    return { ...o, deliveryType: dType };
+  });
 }
 
 export async function getOrderDetails(codeOrOrderNumber: string): Promise<Order | null> {
@@ -569,54 +607,99 @@ export async function updateOrderDelivery(
 }
 
 // ---------------- LIVE CHAT MESSAGES SERVICE ----------------
-export async function getChatMessages(): Promise<ChatMessage[]> {
+export async function getChatMessages(sessionId?: string): Promise<ChatMessage[]> {
   if (isSupabaseConfigured && supabase) {
-    const { data } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
-    if (data && data.length > 0) {
-      return data.map((d: any) => ({
-        id: d.id,
-        sender: d.sender,
-        text: d.text,
-        orderNumber: d.order_number,
-        timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      }));
+    try {
+      let query = supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
+      if (sessionId) {
+        query = query.eq('session_id', sessionId);
+      }
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) {
+        return data.map((d: any) => ({
+          id: String(d.id),
+          sessionId: d.session_id || 'general',
+          sender: d.sender,
+          text: d.text,
+          orderNumber: d.order_number,
+          customerLabel: d.customer_label || (d.order_number ? `Order #${d.order_number}` : undefined),
+          timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }));
+      } else if (error && sessionId) {
+        // Fallback: if session_id column does not exist yet on Supabase
+        const fallback = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
+        if (!fallback.error && fallback.data && fallback.data.length > 0) {
+          return fallback.data.map((d: any) => ({
+            id: String(d.id),
+            sessionId: d.session_id || 'general',
+            sender: d.sender,
+            text: d.text,
+            orderNumber: d.order_number,
+            customerLabel: d.customer_label || (d.order_number ? `Order #${d.order_number}` : undefined),
+            timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('Supabase getChatMessages warning', e);
     }
   }
 
-  return getLocal<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, [
+  const allLocal = getLocal<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, [
     {
       id: 'msg-1',
+      sessionId: 'general',
       sender: 'agent',
       text: 'Hello! 👋 Welcome to IMOSTRADA Live Support. How can we help you with your redeem code, order or top-up today?',
       timestamp: 'Just now',
     },
   ]);
+
+  if (sessionId) {
+    return allLocal.filter((m) => m.sessionId === sessionId || m.sessionId === 'general');
+  }
+  return allLocal;
 }
 
 export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>): Promise<ChatMessage> {
   const newMsg: ChatMessage = {
     id: 'msg-' + Date.now(),
-    ...msg,
+    sessionId: msg.sessionId || 'general',
+    sender: msg.sender,
+    text: msg.text,
+    orderNumber: msg.orderNumber,
+    customerLabel: msg.customerLabel,
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   };
 
   if (isSupabaseConfigured && supabase) {
     try {
-      await supabase.from('chat_messages').insert({
-        sender: msg.sender,
-        text: msg.text,
-        order_number: msg.orderNumber,
+      const { error } = await supabase.from('chat_messages').insert({
+        session_id: newMsg.sessionId,
+        sender: newMsg.sender,
+        text: newMsg.text,
+        order_number: newMsg.orderNumber,
+        customer_label: newMsg.customerLabel,
       });
+
+      if (error) {
+        // Fallback for tables without session_id and customer_label columns
+        await supabase.from('chat_messages').insert({
+          sender: newMsg.sender,
+          text: newMsg.text,
+          order_number: newMsg.orderNumber,
+        });
+      }
     } catch (e) {
       console.warn('Supabase chat insert warning', e);
     }
   }
 
-  const existing = await getChatMessages();
+  const existing = getLocal<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, []);
   const updated = [...existing, newMsg];
   setLocal(STORAGE_KEYS.CHAT_MESSAGES, updated);
 
-  // Dispatch custom window event so customer widget and admin panel update instantly in same browser!
+  // Dispatch custom window event so customer widget and admin panel update instantly
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('imostrada_chat_update', { detail: newMsg }));
   }

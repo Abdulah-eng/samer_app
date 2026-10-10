@@ -376,17 +376,26 @@ export default function AdminPage() {
     });
   };
 
-  // Send Chat Message Reply from Admin
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('');
+  const [chatSearch, setChatSearch] = useState<string>('');
+
+  // Send Chat Message Reply from Admin to Selected Customer
   const handleSendChatReply = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanText = chatReply.trim();
     if (!cleanText) return;
 
+    const targetSession = selectedSessionId || (allConversations.length > 0 ? allConversations[0].sessionId : 'general');
+    const targetConv = allConversations.find((c) => c.sessionId === targetSession) || allConversations[0];
+
     setChatReply('');
     try {
       await sendChatMessage({
+        sessionId: targetSession,
         sender: 'agent',
         text: cleanText,
+        orderNumber: targetConv?.orderNumber,
+        customerLabel: targetConv?.customerLabel,
       });
       const updated = await getChatMessages();
       setChatMessages(updated);
@@ -483,6 +492,62 @@ export default function AdminPage() {
   const processingCount = orders.filter((o) => o.status === 'processing').length;
   const completedCount = orders.filter((o) => o.status === 'completed').length;
   const customerMessagesCount = chatMessages.filter((m) => m.sender === 'user').length;
+
+  // Group chat messages into distinct customer conversations
+  const conversationMap = new Map<
+    string,
+    {
+      sessionId: string;
+      customerLabel: string;
+      orderNumber?: string;
+      lastMessage: string;
+      lastTimestamp: string;
+      unreadCount: number;
+      messages: ChatMessage[];
+    }
+  >();
+
+  chatMessages.forEach((msg) => {
+    const sid = msg.sessionId || 'general';
+    if (!conversationMap.has(sid)) {
+      conversationMap.set(sid, {
+        sessionId: sid,
+        customerLabel:
+          msg.customerLabel || (msg.orderNumber ? `Order #${msg.orderNumber}` : `Customer #${sid.slice(-4).toUpperCase()}`),
+        orderNumber: msg.orderNumber,
+        lastMessage: msg.text,
+        lastTimestamp: msg.timestamp,
+        unreadCount: msg.sender === 'user' ? 1 : 0,
+        messages: [msg],
+      });
+    } else {
+      const conv = conversationMap.get(sid)!;
+      conv.messages.push(msg);
+      conv.lastMessage = msg.text;
+      conv.lastTimestamp = msg.timestamp;
+      if (msg.orderNumber) conv.orderNumber = msg.orderNumber;
+      if (msg.customerLabel) conv.customerLabel = msg.customerLabel;
+      if (msg.sender === 'user') conv.unreadCount++;
+    }
+  });
+
+  const allConversations = Array.from(conversationMap.values()).reverse();
+  const activeSessionId =
+    selectedSessionId || (allConversations.length > 0 ? allConversations[0].sessionId : 'general');
+  const activeConversation =
+    allConversations.find((c) => c.sessionId === activeSessionId) || allConversations[0];
+  const activeMessages = activeConversation ? activeConversation.messages : [];
+
+  const filteredConversations = allConversations.filter((c) => {
+    if (!chatSearch.trim()) return true;
+    const q = chatSearch.toLowerCase();
+    return (
+      c.customerLabel.toLowerCase().includes(q) ||
+      (c.orderNumber && c.orderNumber.toLowerCase().includes(q)) ||
+      c.lastMessage.toLowerCase().includes(q) ||
+      c.sessionId.toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 font-sans flex flex-col">
@@ -1170,171 +1235,264 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* TAB 4: LIVE CHAT INBOX (Answer Live Chat from Customers!) */}
+        {/* TAB 4: LIVE CHAT INBOX (Multi-Customer Messenger System) */}
         {activeTab === 'chat' && (
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[650px]">
-            {/* Chat Inbox Header */}
-            <div className="bg-[#0b1322] border-b border-gray-800 p-4 flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="relative">
-                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                    <MessageSquare className="w-5 h-5" />
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row h-[700px]">
+            {/* LEFT COLUMN: Customer Conversations List */}
+            <div className="w-full md:w-80 border-r border-gray-800 flex flex-col bg-[#070e1a] shrink-0">
+              {/* Header */}
+              <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                    <MessageSquare className="w-4 h-4" />
                   </div>
-                  <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-gray-900 rounded-full" />
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Conversations ({allConversations.length})
+                  </h3>
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white">Live Chat Customer Inbox</h3>
-                  <div className="text-[11px] text-gray-400 flex items-center space-x-2">
-                    <span className="text-emerald-400 font-medium">● Real-time Live Connection</span>
-                    <span>•</span>
-                    <span>Total Messages: {chatMessages.length}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={() => setSoundEnabled(!soundEnabled)}
-                  className={`p-2 rounded-lg border text-xs flex items-center space-x-1.5 transition cursor-pointer ${
-                    soundEnabled
-                      ? 'bg-gray-800 border-gray-700 text-cyan-400'
-                      : 'bg-gray-950 border-gray-800 text-gray-500'
-                  }`}
-                  title="Toggle Message Alert Sound"
-                >
-                  {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                  <span className="hidden sm:inline">{soundEnabled ? 'Sound ON' : 'Muted'}</span>
-                </button>
-
-                <button
-                  onClick={loadAllData}
-                  className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition border border-gray-700 cursor-pointer"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Answer Snippets */}
-            <div className="bg-[#070e1a] px-4 py-2.5 border-b border-gray-800 flex items-center gap-2 overflow-x-auto text-[11px]">
-              <span className="text-gray-400 font-bold shrink-0">Quick Answers:</span>
-              <button
-                type="button"
-                onClick={() =>
-                  setChatReply('Hello! Welcome to IMOSTRADA support. How can I assist you with your order or top-up today?')
-                }
-                className="bg-gray-800 hover:bg-gray-700 text-cyan-300 px-3 py-1 rounded-full whitespace-nowrap transition cursor-pointer"
-              >
-                👋 Welcome & Help
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setChatReply(
-                    'We have received your top-up request! Our team is processing it right now. Usually takes 5-30 minutes.'
-                  )
-                }
-                className="bg-gray-800 hover:bg-gray-700 text-amber-300 px-3 py-1 rounded-full whitespace-nowrap transition cursor-pointer"
-              >
-                ⏳ Top-Up Processing
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setChatReply(
-                    'Your top-up has been completed successfully! Please open your game to verify your balance. Enjoy!'
-                  )
-                }
-                className="bg-gray-800 hover:bg-gray-700 text-emerald-300 px-3 py-1 rounded-full whitespace-nowrap transition cursor-pointer"
-              >
-                ✅ Top-Up Completed
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setChatReply(
-                    'Could you please provide your marketplace order number (e.g. from GAMIVO, G2A or Driffle)?'
-                  )
-                }
-                className="bg-gray-800 hover:bg-gray-700 text-purple-300 px-3 py-1 rounded-full whitespace-nowrap transition cursor-pointer"
-              >
-                ❓ Request Order #
-              </button>
-            </div>
-
-            {/* Messages Feed */}
-            <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-[#060a12]">
-              {chatMessages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-2">
-                  <MessageSquare className="w-8 h-8 opacity-40" />
-                  <p className="text-xs">No chat messages yet. Incoming customer messages will appear here.</p>
-                </div>
-              ) : (
-                chatMessages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex items-start gap-3 ${
-                      msg.sender === 'agent' ? 'flex-row-reverse' : ''
-                    }`}
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={() => setSoundEnabled(!soundEnabled)}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-cyan-400 transition cursor-pointer"
+                    title={soundEnabled ? 'Alert Sound ON' : 'Muted'}
                   >
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
-                        msg.sender === 'user'
-                          ? 'bg-amber-500 text-gray-950 shadow-md shadow-amber-500/20'
-                          : 'bg-cyan-500 text-gray-950 shadow-md shadow-cyan-500/20'
-                      }`}
-                    >
-                      {msg.sender === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-                    </div>
+                    {soundEnabled ? <Volume2 className="w-4 h-4 text-cyan-400" /> : <VolumeX className="w-4 h-4" />}
+                  </button>
+                  <button
+                    onClick={loadAllData}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-white transition cursor-pointer"
+                    title="Refresh"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
 
-                    <div className={`max-w-[75%] space-y-1`}>
-                      <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                        <span className="font-bold text-gray-300">
-                          {msg.sender === 'user' ? 'Customer' : 'Admin Support (You)'}
-                        </span>
-                        <span>•</span>
-                        <span>{msg.timestamp}</span>
-                        {msg.orderNumber && (
-                          <span className="bg-amber-500/10 text-amber-400 px-2 py-0.2 rounded font-mono font-bold">
-                            Order #{msg.orderNumber}
-                          </span>
-                        )}
-                      </div>
+              {/* Search Conversations */}
+              <div className="p-3 border-b border-gray-800">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={chatSearch}
+                    onChange={(e) => setChatSearch(e.target.value)}
+                    placeholder="Search customers, order #..."
+                    className="w-full bg-[#050912] border border-gray-700/80 text-xs text-gray-200 rounded-lg py-2 pl-8 pr-3 outline-none focus:border-cyan-400 font-sans"
+                  />
+                  <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-2.5" />
+                </div>
+              </div>
 
-                      <div
-                        className={`p-3.5 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap ${
-                          msg.sender === 'user'
-                            ? 'bg-[#0d1829] border border-gray-800 text-gray-100 rounded-tl-none font-medium'
-                            : 'bg-cyan-950/60 border border-cyan-800/80 text-cyan-100 rounded-tr-none font-sans'
+              {/* Conversation List Items */}
+              <div className="flex-1 overflow-y-auto divide-y divide-gray-800/60">
+                {filteredConversations.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-gray-500">
+                    No conversations found.
+                  </div>
+                ) : (
+                  filteredConversations.map((conv) => {
+                    const isSelected = conv.sessionId === activeSessionId;
+                    return (
+                      <button
+                        key={conv.sessionId}
+                        type="button"
+                        onClick={() => setSelectedSessionId(conv.sessionId)}
+                        className={`w-full p-3.5 text-left flex items-start gap-3 transition cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#0e1d33] border-l-4 border-l-cyan-400'
+                            : 'hover:bg-[#0a1424] border-l-4 border-l-transparent'
                         }`}
                       >
-                        {msg.text}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-              <div ref={chatScrollRef} />
+                        <div className="relative shrink-0 mt-0.5">
+                          <div className="w-9 h-9 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold text-xs">
+                            <User className="w-4 h-4" />
+                          </div>
+                          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-[#070e1a] rounded-full" />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1 mb-0.5">
+                            <span className="font-bold text-xs text-white truncate">
+                              {conv.customerLabel}
+                            </span>
+                            <span className="text-[10px] text-gray-500 shrink-0">
+                              {conv.lastTimestamp}
+                            </span>
+                          </div>
+
+                          <p className="text-[11px] text-gray-400 truncate">
+                            {conv.lastMessage}
+                          </p>
+
+                          <div className="flex items-center gap-1.5 mt-1.5">
+                            {conv.orderNumber && (
+                              <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-1.5 py-0.2 rounded font-mono text-[9px] font-bold">
+                                #{conv.orderNumber}
+                              </span>
+                            )}
+                            <span className="text-[9px] text-gray-500">
+                              {conv.messages.length} msg{conv.messages.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
 
-            {/* Reply Input Form */}
-            <form onSubmit={handleSendChatReply} className="p-3 bg-[#09111d] border-t border-gray-800 flex gap-2">
-              <input
-                type="text"
-                value={chatReply}
-                onChange={(e) => setChatReply(e.target.value)}
-                placeholder="Type your reply to the customer..."
-                className="flex-1 bg-[#060a12] border border-gray-700 text-xs text-white rounded-xl py-3 px-4 outline-none focus:border-cyan-400 font-sans"
-              />
-              <button
-                type="submit"
-                disabled={!chatReply.trim()}
-                className="px-5 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-gray-950 font-bold text-xs uppercase tracking-wider transition flex items-center space-x-1.5 shadow-md cursor-pointer"
-              >
-                <Send className="w-4 h-4" />
-                <span>Send Reply</span>
-              </button>
-            </form>
+            {/* RIGHT COLUMN: Active Chat Messages Thread */}
+            <div className="flex-1 flex flex-col bg-[#060a12] min-w-0">
+              {/* Active Conversation Header */}
+              <div className="p-4 bg-[#09111d] border-b border-gray-800 flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-9 h-9 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 flex items-center justify-center font-bold text-xs">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span>{activeConversation?.customerLabel || 'Customer'}</span>
+                      {activeConversation?.orderNumber && (
+                        <span className="bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] px-2 py-0.5 rounded font-mono font-bold">
+                          Order #{activeConversation.orderNumber}
+                        </span>
+                      )}
+                    </h4>
+                    <div className="flex items-center space-x-2 text-[10px] text-gray-400 mt-0.5">
+                      <span className="text-emerald-400">● Live Customer Thread</span>
+                      <span>•</span>
+                      <span className="font-mono text-gray-500">ID: {activeConversation?.sessionId}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {activeConversation?.orderNumber && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery(activeConversation.orderNumber!);
+                      setActiveTab('orders');
+                    }}
+                    className="text-[11px] bg-gray-800 hover:bg-gray-700 text-cyan-300 px-3 py-1.5 rounded-lg border border-gray-700 transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>View in Orders Tab</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Quick Answers Bar */}
+              <div className="bg-[#070e1a] px-4 py-2 border-b border-gray-800 flex items-center gap-2 overflow-x-auto text-[11px]">
+                <span className="text-gray-400 font-bold shrink-0">Quick Answers:</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setChatReply('Hello! Welcome to IMOSTRADA support. How can I assist you with your order or top-up today?')
+                  }
+                  className="bg-gray-800 hover:bg-gray-700 text-cyan-300 px-2.5 py-1 rounded-full whitespace-nowrap transition cursor-pointer text-[10px]"
+                >
+                  👋 Welcome
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setChatReply(
+                      'We have received your top-up request! Our team is processing it right now. Usually takes 5-30 minutes.'
+                    )
+                  }
+                  className="bg-gray-800 hover:bg-gray-700 text-amber-300 px-2.5 py-1 rounded-full whitespace-nowrap transition cursor-pointer text-[10px]"
+                >
+                  ⏳ Top-Up Processing
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setChatReply(
+                      'Your top-up has been completed successfully! Please open your game to verify your balance. Enjoy!'
+                    )
+                  }
+                  className="bg-gray-800 hover:bg-gray-700 text-emerald-300 px-2.5 py-1 rounded-full whitespace-nowrap transition cursor-pointer text-[10px]"
+                >
+                  ✅ Top-Up Completed
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setChatReply('Could you please provide your marketplace order number (e.g. from GAMIVO, G2A or Driffle)?')
+                  }
+                  className="bg-gray-800 hover:bg-gray-700 text-purple-300 px-2.5 py-1 rounded-full whitespace-nowrap transition cursor-pointer text-[10px]"
+                >
+                  ❓ Request Order #
+                </button>
+              </div>
+
+              {/* Messages Thread for Selected Customer */}
+              <div className="flex-1 p-5 overflow-y-auto space-y-3.5 bg-[#060a12]">
+                {activeMessages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-2">
+                    <MessageSquare className="w-8 h-8 opacity-40" />
+                    <p className="text-xs">No messages in this conversation yet.</p>
+                  </div>
+                ) : (
+                  activeMessages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex items-start gap-3 ${
+                        msg.sender === 'agent' ? 'flex-row-reverse' : ''
+                      }`}
+                    >
+                      <div
+                        className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
+                          msg.sender === 'user'
+                            ? 'bg-amber-500 text-gray-950 shadow-md shadow-amber-500/20'
+                            : 'bg-cyan-500 text-gray-950 shadow-md shadow-cyan-500/20'
+                        }`}
+                      >
+                        {msg.sender === 'user' ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
+                      </div>
+
+                      <div className="max-w-[75%] space-y-1">
+                        <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                          <span className="font-bold text-gray-300">
+                            {msg.sender === 'user' ? (msg.customerLabel || 'Customer') : 'Admin Support (You)'}
+                          </span>
+                          <span>•</span>
+                          <span>{msg.timestamp}</span>
+                        </div>
+
+                        <div
+                          className={`p-3 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap ${
+                            msg.sender === 'user'
+                              ? 'bg-[#0d1829] border border-gray-800 text-gray-100 rounded-tl-none font-medium'
+                              : 'bg-cyan-950/60 border border-cyan-800/80 text-cyan-100 rounded-tr-none font-sans'
+                          }`}
+                        >
+                          {msg.text}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={chatScrollRef} />
+              </div>
+
+              {/* Reply Input Form */}
+              <form onSubmit={handleSendChatReply} className="p-3 bg-[#09111d] border-t border-gray-800 flex gap-2">
+                <input
+                  type="text"
+                  value={chatReply}
+                  onChange={(e) => setChatReply(e.target.value)}
+                  placeholder={`Reply to ${activeConversation?.customerLabel || 'customer'}...`}
+                  className="flex-1 bg-[#060a12] border border-gray-700 text-xs text-white rounded-xl py-3 px-4 outline-none focus:border-cyan-400 font-sans"
+                />
+                <button
+                  type="submit"
+                  disabled={!chatReply.trim()}
+                  className="px-5 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-gray-950 font-bold text-xs uppercase tracking-wider transition flex items-center space-x-1.5 shadow-md cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Send Reply</span>
+                </button>
+              </form>
+            </div>
           </div>
         )}
 

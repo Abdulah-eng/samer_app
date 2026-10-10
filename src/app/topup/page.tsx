@@ -132,10 +132,17 @@ function TopUpContent() {
 
       // Dispatch auto-notification in live chat so client and agent know immediately
       try {
+        let sid = typeof window !== 'undefined' ? localStorage.getItem('imostrada_chat_session_id') : null;
+        if (!sid) {
+          sid = 'cust_' + Math.random().toString(36).substring(2, 10);
+          if (typeof window !== 'undefined') localStorage.setItem('imostrada_chat_session_id', sid);
+        }
         await sendChatMessage({
+          sessionId: sid,
           sender: 'user',
           text: `[Top-Up Request Submitted] Order #${orderNumber.trim()} on ${platform} for ${productName}. Email: ${accountEmail.trim()}`,
           orderNumber: orderNumber.trim(),
+          customerLabel: `Order #${orderNumber.trim()}`,
         });
       } catch {
         // non-blocking

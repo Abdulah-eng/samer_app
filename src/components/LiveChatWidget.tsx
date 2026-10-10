@@ -16,13 +16,28 @@ export const LiveChatWidget: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  useEffect(() => {
-    // Initial fetch
-    getChatMessages().then(setMessages);
+  const [sessionId, setSessionId] = useState<string>('');
 
-    // Event listener for chat updates from admin or user
-    const handleChatUpdate = () => {
-      getChatMessages().then(setMessages);
+  useEffect(() => {
+    // Persistent customer session ID
+    let sid = typeof window !== 'undefined' ? localStorage.getItem('imostrada_chat_session_id') : null;
+    if (!sid) {
+      sid = 'cust_' + Math.random().toString(36).substring(2, 10);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('imostrada_chat_session_id', sid);
+      }
+    }
+    setSessionId(sid);
+
+    // Initial fetch for this customer session
+    getChatMessages(sid).then(setMessages);
+
+    // Event listener for chat updates
+    const handleChatUpdate = (e: any) => {
+      const updatedMsg = e?.detail;
+      if (!updatedMsg || updatedMsg.sessionId === sid || updatedMsg.sessionId === 'general') {
+        getChatMessages(sid).then(setMessages);
+      }
     };
 
     // Event listener to open chat from any button on page
@@ -48,17 +63,26 @@ export const LiveChatWidget: React.FC = () => {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanText = inputMessage.trim();
-    if (!cleanText) return;
+    if (!cleanText || !sessionId) return;
 
     setInputMessage('');
 
+    // Check if on order page or topup page with order # or code
+    let activeOrderParam: string | undefined;
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      activeOrderParam = params.get('code') || params.get('order') || undefined;
+    }
+
     try {
       await sendChatMessage({
+        sessionId,
         sender: 'user',
         text: cleanText,
+        orderNumber: activeOrderParam,
+        customerLabel: activeOrderParam ? `Code: ${activeOrderParam}` : `Customer #${sessionId.slice(-4).toUpperCase()}`,
       });
-      // Refresh messages
-      const updated = await getChatMessages();
+      const updated = await getChatMessages(sessionId);
       setMessages(updated);
     } catch (err) {
       console.error('Error sending chat message', err);

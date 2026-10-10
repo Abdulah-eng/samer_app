@@ -52,10 +52,12 @@ export interface Order {
 
 export interface ChatMessage {
   id: string;
+  sessionId?: string;
   sender: 'user' | 'agent';
   text: string;
   timestamp: string;
   orderNumber?: string;
+  customerLabel?: string;
 }
 
 export interface StoreSettings {

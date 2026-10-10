@@ -66,13 +66,14 @@ WHERE (delivery_type IS NULL OR delivery_type = 'account')
 UPDATE redeem_codes 
 SET delivery_type = 'topup' 
 WHERE (delivery_type IS NULL OR delivery_type = 'account')
-  AND (
-    LOWER(product_name) LIKE '%top up%' 
-    OR LOWER(product_name) LIKE '%top-up%' 
-    OR LOWER(product_name) LIKE '%topup%'
-    OR LOWER(product_name) LIKE '%v-bucks%' 
-    OR LOWER(product_name) LIKE '%coins%' 
-    OR LOWER(product_name) LIKE '%points%'
+  AND product_id IN (
+    SELECT id FROM products 
+    WHERE LOWER(name) LIKE '%top up%' 
+       OR LOWER(name) LIKE '%top-up%' 
+       OR LOWER(name) LIKE '%topup%'
+       OR LOWER(name) LIKE '%v-bucks%' 
+       OR LOWER(name) LIKE '%coins%' 
+       OR LOWER(name) LIKE '%points%'
   );
 
 -- 7. Add default Top-Up product (if not already added)

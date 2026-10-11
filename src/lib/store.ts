@@ -616,6 +616,16 @@ export async function updateOrderDelivery(
   return updatedOrder;
 }
 
+export async function deleteOrder(id: string): Promise<boolean> {
+  if (isSupabaseConfigured && supabase) {
+    await supabase.from('orders').delete().eq('id', id);
+  }
+  const orders = await getOrders();
+  const updated = orders.filter((o) => o.id !== id);
+  setLocal(STORAGE_KEYS.ORDERS, updated);
+  return true;
+}
+
 // ---------------- LIVE CHAT MESSAGES SERVICE ----------------
 export async function getChatMessages(sessionId?: string): Promise<ChatMessage[]> {
   if (isSupabaseConfigured && supabase) {
@@ -769,26 +779,43 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     const { data } = await supabase.from('store_settings').select('*').single();
     if (data) {
       let onlineStatus: import('./types').OnlineStatus = 'online';
-      if (data.online_status) {
-        onlineStatus = data.online_status;
-      } else if (data.is_online === false) {
+      let cleanNotice = data.notice_text || '';
+
+      if (cleanNotice.includes('<!--status:sleeping-->')) {
+        onlineStatus = 'sleeping';
+        cleanNotice = cleanNotice.replace('<!--status:sleeping-->', '').trim();
+      } else if (cleanNotice.includes('<!--status:offline-->') || data.is_online === false) {
         onlineStatus = 'offline';
+        cleanNotice = cleanNotice.replace('<!--status:offline-->', '').trim();
+      } else if (data.online_status) {
+        onlineStatus = data.online_status;
+      } else {
+        onlineStatus = 'online';
       }
+
       return {
         storeName: data.store_name,
         merchantName: data.merchant_name,
-        isOnline: data.is_online !== false && onlineStatus !== 'offline',
+        isOnline: onlineStatus !== 'offline',
         onlineStatus,
-        noticeText: data.notice_text,
+        noticeText: cleanNotice,
         whatsappNumber: data.whatsapp_number,
         telegramUsername: data.telegram_username,
       };
     }
   }
   const local = getLocal<StoreSettings>(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
+  let localStatus: import('./types').OnlineStatus = local.onlineStatus || (local.isOnline ? 'online' : 'offline');
+  let cleanLocalNotice = local.noticeText || '';
+  if (cleanLocalNotice.includes('<!--status:sleeping-->')) {
+    localStatus = 'sleeping';
+    cleanLocalNotice = cleanLocalNotice.replace('<!--status:sleeping-->', '').trim();
+  }
   return {
     ...local,
-    onlineStatus: local.onlineStatus || (local.isOnline ? 'online' : 'offline'),
+    isOnline: localStatus !== 'offline',
+    onlineStatus: localStatus,
+    noticeText: cleanLocalNotice,
   };
 }
 
@@ -797,23 +824,32 @@ export async function updateStoreSettings(settings: Partial<StoreSettings>): Pro
   const effectiveOnlineStatus =
     settings.onlineStatus ||
     (settings.isOnline === false ? 'offline' : current.onlineStatus || 'online');
-  const effectiveIsOnline =
-    effectiveOnlineStatus !== 'offline' && (settings.isOnline !== undefined ? settings.isOnline : true);
+  const effectiveIsOnline = effectiveOnlineStatus !== 'offline';
+
+  let rawNotice = (settings.noticeText !== undefined ? settings.noticeText : current.noticeText) || '';
+  rawNotice = rawNotice.replace(/<!--status:[a-z]+-->/g, '').trim();
+
+  let payloadNotice = rawNotice;
+  if (effectiveOnlineStatus === 'sleeping') {
+    payloadNotice = `<!--status:sleeping-->${rawNotice}`;
+  } else if (effectiveOnlineStatus === 'offline') {
+    payloadNotice = `<!--status:offline-->${rawNotice}`;
+  }
 
   const updated: StoreSettings = {
     ...current,
     ...settings,
     isOnline: effectiveIsOnline,
     onlineStatus: effectiveOnlineStatus,
+    noticeText: rawNotice,
   };
 
   if (isSupabaseConfigured && supabase) {
-    // 1. Try updating row id: 1
     const updatePayload: any = {
       store_name: updated.storeName,
       merchant_name: updated.merchantName,
-      is_online: updated.isOnline,
-      notice_text: updated.noticeText,
+      is_online: effectiveIsOnline,
+      notice_text: payloadNotice,
     };
     if (updated.onlineStatus) {
       updatePayload.online_status = updated.onlineStatus;
@@ -825,7 +861,7 @@ export async function updateStoreSettings(settings: Partial<StoreSettings>): Pro
       .eq('id', 1)
       .select();
 
-    // Fallback if online_status column does not exist yet on Supabase table
+    // Fallback if online_status column does not exist on Supabase table
     if (updateError && updatePayload.online_status) {
       delete updatePayload.online_status;
       const retry = await supabase
@@ -837,24 +873,18 @@ export async function updateStoreSettings(settings: Partial<StoreSettings>): Pro
       updateError = retry.error;
     }
 
-    // 2. If row id: 1 does not exist, insert it
     if (!updateError && (!updateData || updateData.length === 0)) {
-      const { error: insertError } = await supabase.from('store_settings').insert({
+      await supabase.from('store_settings').insert({
         id: 1,
         ...updatePayload,
       });
-
-      if (insertError) {
-        console.error('Supabase insert store_settings error:', insertError);
-        throw new Error(`Database error saving store settings: ${insertError.message}`);
-      }
-    } else if (updateError) {
-      console.error('Supabase update store_settings error:', updateError);
-      throw new Error(`Database error updating store settings: ${updateError.message}`);
     }
   }
 
-  setLocal(STORAGE_KEYS.SETTINGS, updated);
+  setLocal(STORAGE_KEYS.SETTINGS, {
+    ...updated,
+    noticeText: payloadNotice,
+  });
   return updated;
 }
 

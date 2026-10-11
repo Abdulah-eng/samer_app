@@ -247,9 +247,9 @@ export const LiveChatWidget: React.FC = () => {
                     <span>🌙 Currently Sleeping • Back soon</span>
                   </div>
                 ) : (
-                  <div className="flex items-center space-x-1.5 text-[10px] text-emerald-400 font-semibold mt-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
-                    <span>Agent Online • Typically replies in 5m</span>
+                  <div className="flex items-center space-x-1.5 text-[10px] text-gray-400 font-medium mt-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
+                    <span>Support Desk • Leave a message</span>
                   </div>
                 )}
               </div>
@@ -344,7 +344,7 @@ export const LiveChatWidget: React.FC = () => {
                         setInputKey(e.target.value.toUpperCase());
                         setKeyError('');
                       }}
-                      placeholder="e.g. GAMIVO-XXXX or G2A-XXXX"
+                      placeholder="XXXX-XXXX-XXXX"
                       className={`w-full bg-[#08111e] border text-xs text-white rounded-xl py-2.5 pl-9 pr-3 outline-none font-mono uppercase transition ${
                         keyError ? 'border-rose-500/80 focus:border-rose-400' : 'border-gray-700 focus:border-amber-400'
                       }`}
@@ -499,7 +499,7 @@ export const LiveChatWidget: React.FC = () => {
           />
         </div>
         <span className="hidden sm:inline-block">
-          {isSleeping ? 'LIVE CHAT (SLEEPING)' : 'LIVE CHAT SUPPORT'}
+          {isSleeping ? 'SUPPORT (SLEEPING)' : 'SUPPORT DESK'}
         </span>
       </button>
     </div>

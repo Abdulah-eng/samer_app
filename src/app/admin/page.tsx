@@ -13,6 +13,7 @@ import {
   deleteRedeemCode,
   getOrders,
   updateOrderDelivery,
+  deleteOrder,
   getStoreSettings,
   updateStoreSettings,
   getChatMessages,
@@ -466,12 +467,23 @@ export default function AdminPage() {
     try {
       const updated = await updateStoreSettings({
         onlineStatus: status,
-        isOnline: status === 'online',
       });
       setSettings(updated);
       showNotification('success', `Live Support status set to ${status === 'online' ? '🟢 ONLINE' : '🌙 SLEEPING'}!`);
     } catch {
       showNotification('error', 'Failed to update status');
+    }
+  };
+
+  // Delete Order
+  const handleDeleteOrder = async (orderId: string, orderNum: string) => {
+    if (!window.confirm(`Are you sure you want to delete order ${orderNum}?`)) return;
+    try {
+      await deleteOrder(orderId);
+      showNotification('success', `Order ${orderNum} deleted successfully!`);
+      loadAllData();
+    } catch {
+      showNotification('error', 'Error deleting order');
     }
   };
 
@@ -1000,23 +1012,32 @@ export default function AdminPage() {
                           )}
                         </td>
                         <td className="p-4 text-right">
-                          <button
-                            onClick={() => openFulfillModal(o)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 ml-auto cursor-pointer ${
-                              o.status === 'processing'
-                                ? 'bg-amber-500 hover:bg-amber-400 text-gray-950 shadow-md'
-                                : 'bg-gray-800 hover:bg-gray-700 text-cyan-300 border border-gray-700'
-                            }`}
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                            <span>
-                              {o.status === 'processing'
-                                ? o.deliveryType === 'topup'
-                                  ? 'Fulfill Top-Up'
-                                  : 'Fulfill Order'
-                                : 'Edit Details'}
-                            </span>
-                          </button>
+                          <div className="flex items-center justify-end space-x-2">
+                            <button
+                              onClick={() => openFulfillModal(o)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer ${
+                                o.status === 'processing'
+                                  ? 'bg-amber-500 hover:bg-amber-400 text-gray-950 shadow-md'
+                                  : 'bg-gray-800 hover:bg-gray-700 text-cyan-300 border border-gray-700'
+                              }`}
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>
+                                {o.status === 'processing'
+                                  ? o.deliveryType === 'topup'
+                                    ? 'Fulfill Top-Up'
+                                    : 'Fulfill Order'
+                                  : 'Edit Details'}
+                              </span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteOrder(o.id, o.orderNumber)}
+                              className="p-1.5 bg-rose-950/40 hover:bg-rose-900 text-rose-300 border border-rose-800/60 rounded-lg transition cursor-pointer"
+                              title="Delete Order"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))

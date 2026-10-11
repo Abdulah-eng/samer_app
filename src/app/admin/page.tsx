@@ -65,7 +65,13 @@ import {
   Volume2,
   VolumeX,
   Moon,
+  Image as ImageIcon,
+  ZoomIn,
+  Download,
+  X,
+  Loader2,
 } from 'lucide-react';
+import { compressImageFile } from '@/lib/imageUtils';
 
 const ADMIN_PASSCODE = 'admin123';
 
@@ -433,6 +439,29 @@ export default function AdminPage() {
   const [chatSearch, setChatSearch] = useState<string>('');
   const [chatViewMode, setChatViewMode] = useState<'conversations' | 'allMessages'>('conversations');
 
+  // Admin Chat Image Upload States
+  const [adminAttachedImage, setAdminAttachedImage] = useState<string | null>(null);
+  const [adminImageFileName, setAdminImageFileName] = useState<string | null>(null);
+  const [isAdminProcessingImage, setIsAdminProcessingImage] = useState<boolean>(false);
+  const [adminLightboxImage, setAdminLightboxImage] = useState<string | null>(null);
+  const adminFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAdminFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsAdminProcessingImage(true);
+      const compressed = await compressImageFile(file);
+      setAdminAttachedImage(compressed);
+      setAdminImageFileName(file.name);
+    } catch (err: any) {
+      alert(err?.message || 'Failed to process image');
+    } finally {
+      setIsAdminProcessingImage(false);
+      e.target.value = '';
+    }
+  };
+
   // Delete Single Message
   const handleDeleteSingleMessage = async (msgId: string) => {
     if (!window.confirm('Are you sure you want to delete this message?')) return;
@@ -491,17 +520,22 @@ export default function AdminPage() {
   const handleSendChatReply = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanText = chatReply.trim();
-    if (!cleanText) return;
+    const currentImage = adminAttachedImage;
+    if (!cleanText && !currentImage) return;
 
     const targetSession = selectedSessionId || (allConversations.length > 0 ? allConversations[0].sessionId : 'general');
     const targetConv = allConversations.find((c) => c.sessionId === targetSession) || allConversations[0];
 
     setChatReply('');
+    setAdminAttachedImage(null);
+    setAdminImageFileName(null);
+
     try {
       await sendChatMessage({
         sessionId: targetSession,
         sender: 'agent',
         text: cleanText,
+        imageUrl: currentImage || undefined,
         orderNumber: targetConv?.orderNumber,
         customerLabel: targetConv?.customerLabel,
       });
@@ -1601,6 +1635,27 @@ export default function AdminPage() {
                               <span className="text-[10px] text-gray-500">{msg.timestamp}</span>
                               <span className="text-[10px] text-gray-600 font-mono">({msg.sessionId || 'general'})</span>
                             </div>
+                            {msg.imageUrl && (
+                              <div className="mt-2 mb-1.5 overflow-hidden rounded-xl border border-gray-700/80 bg-black/40 max-w-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => setAdminLightboxImage(msg.imageUrl!)}
+                                  className="group relative block w-full text-left overflow-hidden cursor-zoom-in"
+                                  title="Click to zoom image"
+                                >
+                                  <img
+                                    src={msg.imageUrl}
+                                    alt="Attachment"
+                                    className="max-h-40 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                    loading="lazy"
+                                  />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white font-semibold text-[11px]">
+                                    <ZoomIn className="w-3.5 h-3.5" />
+                                    <span>Zoom Image</span>
+                                  </div>
+                                </button>
+                              </div>
+                            )}
                             <p className="text-xs text-gray-200 whitespace-pre-wrap leading-relaxed">{msg.text}</p>
                           </div>
                         </div>
@@ -1773,13 +1828,34 @@ export default function AdminPage() {
                           </div>
 
                           <div
-                            className={`p-3 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap text-left ${
+                            className={`p-3 rounded-2xl text-xs leading-relaxed text-left ${
                               msg.sender === 'user'
                                 ? 'bg-[#0d1829] border border-gray-800 text-gray-100 rounded-tl-none font-medium'
                                 : 'bg-cyan-950/60 border border-cyan-800/80 text-cyan-100 rounded-tr-none font-sans'
                             }`}
                           >
-                            {msg.text}
+                            {msg.imageUrl && (
+                              <div className="mb-2 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                                <button
+                                  type="button"
+                                  onClick={() => setAdminLightboxImage(msg.imageUrl!)}
+                                  className="group relative block w-full text-left overflow-hidden cursor-zoom-in"
+                                  title="Click to zoom image"
+                                >
+                                  <img
+                                    src={msg.imageUrl}
+                                    alt="Chat attachment"
+                                    className="max-h-56 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                    loading="lazy"
+                                  />
+                                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white font-semibold text-[11px] backdrop-blur-[1px]">
+                                    <ZoomIn className="w-3.5 h-3.5" />
+                                    <span>Click to Zoom</span>
+                                  </div>
+                                </button>
+                              </div>
+                            )}
+                            {msg.text && <div className="whitespace-pre-wrap break-words">{msg.text}</div>}
                           </div>
                         </div>
                       </div>
@@ -1788,19 +1864,75 @@ export default function AdminPage() {
                   <div ref={chatScrollRef} />
                 </div>
 
+                {/* Attachment Preview above Admin Reply Input */}
+                {adminAttachedImage && (
+                  <div className="px-4 py-2 bg-[#070e1a] border-t border-gray-800 flex items-center justify-between animate-fade-in">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-cyan-500/60 bg-black shrink-0">
+                        <img src={adminAttachedImage} alt="Preview" className="w-full h-full object-cover" />
+                      </div>
+                      <div className="text-[11px] min-w-0">
+                        <span className="font-bold text-cyan-300 block truncate max-w-[240px]">
+                          {adminImageFileName || 'Image attached'}
+                        </span>
+                        <span className="text-[9px] text-gray-400">Ready to send to customer</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdminAttachedImage(null);
+                        setAdminImageFileName(null);
+                      }}
+                      className="p-1 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-rose-950/40 transition cursor-pointer"
+                      title="Remove attachment"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
                 {/* Reply Input Form */}
-                <form onSubmit={handleSendChatReply} className="p-3 bg-[#09111d] border-t border-gray-800 flex gap-2">
+                <form onSubmit={handleSendChatReply} className="p-3 bg-[#09111d] border-t border-gray-800 flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={adminFileInputRef}
+                    onChange={handleAdminFileSelect}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => adminFileInputRef.current?.click()}
+                    disabled={isAdminProcessingImage}
+                    className={`p-3 rounded-xl border transition cursor-pointer shrink-0 ${
+                      adminAttachedImage
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/60'
+                        : 'bg-[#060a12] hover:bg-gray-800 text-gray-400 hover:text-cyan-300 border-gray-700'
+                    }`}
+                    title="Attach screenshot or photo"
+                  >
+                    {isAdminProcessingImage ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                    ) : (
+                      <ImageIcon className="w-4 h-4" />
+                    )}
+                  </button>
                   <input
                     type="text"
                     value={chatReply}
                     onChange={(e) => setChatReply(e.target.value)}
-                    placeholder={`Reply to ${activeConversation?.customerLabel || 'customer'}...`}
+                    placeholder={
+                      adminAttachedImage
+                        ? `Send image with caption to ${activeConversation?.customerLabel || 'customer'}...`
+                        : `Reply to ${activeConversation?.customerLabel || 'customer'}...`
+                    }
                     className="flex-1 bg-[#060a12] border border-gray-700 text-xs text-white rounded-xl py-3 px-4 outline-none focus:border-cyan-400 font-sans"
                   />
                   <button
                     type="submit"
-                    disabled={!chatReply.trim()}
-                    className="px-5 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-gray-950 font-bold text-xs uppercase tracking-wider transition flex items-center space-x-1.5 shadow-md cursor-pointer"
+                    disabled={(!chatReply.trim() && !adminAttachedImage) || isAdminProcessingImage}
+                    className="px-5 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-gray-950 font-bold text-xs uppercase tracking-wider transition flex items-center space-x-1.5 shadow-md cursor-pointer shrink-0"
                   >
                     <Send className="w-4 h-4" />
                     <span>Send Reply</span>
@@ -2177,6 +2309,47 @@ export default function AdminPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Image Lightbox Modal */}
+      {adminLightboxImage && (
+        <div
+          className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setAdminLightboxImage(null)}
+        >
+          <div
+            className="relative max-w-5xl max-h-[92vh] flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-full flex items-center justify-between pb-2 px-1 text-white">
+              <span className="text-xs text-gray-400 font-mono">Attachment Preview</span>
+              <div className="flex items-center space-x-2">
+                <a
+                  href={adminLightboxImage}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download="customer-chat-attachment.jpg"
+                  className="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-cyan-300 text-xs rounded-lg flex items-center gap-1 transition"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download</span>
+                </a>
+                <button
+                  onClick={() => setAdminLightboxImage(null)}
+                  className="p-1.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition cursor-pointer"
+                  title="Close Preview"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <img
+              src={adminLightboxImage}
+              alt="Customer screenshot"
+              className="max-h-[82vh] max-w-full rounded-xl object-contain shadow-2xl border border-gray-800 bg-black/60"
+            />
           </div>
         </div>
       )}

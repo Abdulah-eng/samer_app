@@ -55,6 +55,7 @@ export interface ChatMessage {
   sessionId?: string;
   sender: 'user' | 'agent';
   text: string;
+  imageUrl?: string;
   timestamp: string;
   orderNumber?: string;
   customerLabel?: string;

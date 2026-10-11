@@ -628,6 +628,29 @@ export async function deleteOrder(id: string): Promise<boolean> {
 
 // ---------------- LIVE CHAT MESSAGES SERVICE ----------------
 export async function getChatMessages(sessionId?: string): Promise<ChatMessage[]> {
+  const mapRowToMsg = (d: any): ChatMessage => {
+    let rawText = d.text || '';
+    let imageUrl = d.image_url || undefined;
+    if (!imageUrl && rawText.includes('[IMAGE_ATTACHMENT:')) {
+      const match = rawText.match(/\[IMAGE_ATTACHMENT:([\s\S]*?)\]/);
+      if (match) {
+        imageUrl = match[1];
+        rawText = rawText.replace(match[0], '').trim();
+      }
+    }
+
+    return {
+      id: String(d.id),
+      sessionId: d.session_id || 'general',
+      sender: d.sender,
+      text: rawText,
+      imageUrl,
+      orderNumber: d.order_number,
+      customerLabel: d.customer_label || (d.order_number ? `Order #${d.order_number}` : undefined),
+      timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+  };
+
   if (isSupabaseConfigured && supabase) {
     try {
       let query = supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
@@ -636,28 +659,12 @@ export async function getChatMessages(sessionId?: string): Promise<ChatMessage[]
       }
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
-        return data.map((d: any) => ({
-          id: String(d.id),
-          sessionId: d.session_id || 'general',
-          sender: d.sender,
-          text: d.text,
-          orderNumber: d.order_number,
-          customerLabel: d.customer_label || (d.order_number ? `Order #${d.order_number}` : undefined),
-          timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        }));
+        return data.map(mapRowToMsg);
       } else if (error && sessionId) {
         // Fallback: if session_id column does not exist yet on Supabase
         const fallback = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
         if (!fallback.error && fallback.data && fallback.data.length > 0) {
-          return fallback.data.map((d: any) => ({
-            id: String(d.id),
-            sessionId: d.session_id || 'general',
-            sender: d.sender,
-            text: d.text,
-            orderNumber: d.order_number,
-            customerLabel: d.customer_label || (d.order_number ? `Order #${d.order_number}` : undefined),
-            timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          }));
+          return fallback.data.map(mapRowToMsg);
         }
       }
     } catch (e) {
@@ -675,10 +682,23 @@ export async function getChatMessages(sessionId?: string): Promise<ChatMessage[]
     },
   ]);
 
+  const sanitizedLocal = allLocal.map((m) => {
+    let rawText = m.text || '';
+    let imageUrl = m.imageUrl;
+    if (!imageUrl && rawText.includes('[IMAGE_ATTACHMENT:')) {
+      const match = rawText.match(/\[IMAGE_ATTACHMENT:([\s\S]*?)\]/);
+      if (match) {
+        imageUrl = match[1];
+        rawText = rawText.replace(match[0], '').trim();
+      }
+    }
+    return { ...m, text: rawText, imageUrl };
+  });
+
   if (sessionId) {
-    return allLocal.filter((m) => m.sessionId === sessionId || m.sessionId === 'general');
+    return sanitizedLocal.filter((m) => m.sessionId === sessionId || m.sessionId === 'general');
   }
-  return allLocal;
+  return sanitizedLocal;
 }
 
 export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>): Promise<ChatMessage> {
@@ -686,7 +706,8 @@ export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>
     id: 'msg-' + Date.now(),
     sessionId: msg.sessionId || 'general',
     sender: msg.sender,
-    text: msg.text,
+    text: msg.text || '',
+    imageUrl: msg.imageUrl,
     orderNumber: msg.orderNumber,
     customerLabel: msg.customerLabel,
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -694,10 +715,14 @@ export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>
 
   if (isSupabaseConfigured && supabase) {
     try {
+      const textToStore = newMsg.imageUrl
+        ? `[IMAGE_ATTACHMENT:${newMsg.imageUrl}]\n${newMsg.text || ''}`.trim()
+        : newMsg.text;
+
       const { error } = await supabase.from('chat_messages').insert({
         session_id: newMsg.sessionId,
         sender: newMsg.sender,
-        text: newMsg.text,
+        text: textToStore,
         order_number: newMsg.orderNumber,
         customer_label: newMsg.customerLabel,
       });
@@ -706,7 +731,7 @@ export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>
         // Fallback for tables without session_id and customer_label columns
         await supabase.from('chat_messages').insert({
           sender: newMsg.sender,
-          text: newMsg.text,
+          text: textToStore,
           order_number: newMsg.orderNumber,
         });
       }
@@ -725,7 +750,8 @@ export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: newMsg.text,
+        message: newMsg.text || (newMsg.imageUrl ? '[Attached Image / Screenshot]' : ''),
+        hasImage: Boolean(newMsg.imageUrl),
         customerCode: newMsg.orderNumber,
         customerLabel: newMsg.customerLabel,
         timestamp: newMsg.timestamp,

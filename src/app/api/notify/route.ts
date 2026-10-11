@@ -3,17 +3,18 @@ import { NextResponse } from 'next/server';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { message, customerCode, customerLabel, timestamp } = body;
+    const { message, customerCode, customerLabel, timestamp, hasImage } = body;
 
     const email = 'samermastouri21@gmail.com';
 
-    const payload = {
-      _subject: `🔔 New Live Chat Message: ${customerCode || customerLabel || 'Customer'}`,
+    const payload: Record<string, string> = {
+      _subject: `🔔 New Live Chat Message${hasImage ? ' [📸 Image]' : ''}: ${customerCode || customerLabel || 'Customer'}`,
       _template: 'box',
       _captcha: 'false',
       'Redeem Code / Order': customerCode || 'N/A',
       'Customer Label': customerLabel || 'Customer',
-      'Message': message || '',
+      'Message': message || (hasImage ? '[Screenshot / Image Attached]' : ''),
+      'Screenshot Attached': hasImage ? 'Yes (Open Admin Chat to view image)' : 'No',
       'Time': timestamp || new Date().toLocaleString(),
     };
 

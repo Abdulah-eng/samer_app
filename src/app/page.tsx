@@ -29,6 +29,9 @@ import {
   ShoppingCart,
   Settings,
   ChevronRight,
+  User,
+  Key,
+  Coins,
 } from 'lucide-react';
 
 const HOME_FAQS = [
@@ -160,13 +163,25 @@ export default function HomePage() {
             </div>
 
             {/* Big hero heading */}
-            <div className="space-y-1">
+            <div className="space-y-2">
               <h1 className="text-4xl sm:text-5xl lg:text-[52px] font-black leading-[1.1] tracking-tight text-white">
                 Redeem Your Code
               </h1>
-              <h1 className="text-4xl sm:text-5xl lg:text-[52px] font-black leading-[1.1] tracking-tight text-amber-400">
-                Get Your Account / Key
-              </h1>
+              <div className="text-3xl sm:text-4xl lg:text-[44px] font-black leading-[1.2] tracking-tight flex flex-wrap items-center gap-x-3.5 gap-y-2 pt-0.5">
+                <span className="text-white">Get Your</span>
+                <span className="inline-flex items-center gap-2 text-cyan-400">
+                  <User className="w-7 h-7 sm:w-9 sm:h-9 text-cyan-400 stroke-[2.6]" />
+                  <span>Account</span>
+                </span>
+                <span className="inline-flex items-center gap-2 text-amber-400">
+                  <Key className="w-7 h-7 sm:w-9 sm:h-9 text-amber-400 stroke-[2.6]" />
+                  <span>Key</span>
+                </span>
+                <span className="inline-flex items-center gap-2 text-purple-400">
+                  <Coins className="w-7 h-7 sm:w-9 sm:h-9 text-purple-400 stroke-[2.6]" />
+                  <span>Top-Up</span>
+                </span>
+              </div>
             </div>
 
             <p className="text-sm text-gray-300 leading-relaxed max-w-xs">
@@ -440,9 +455,14 @@ export default function HomePage() {
                 <CheckCircle2 className="w-4 h-4 sm:w-6 sm:h-6 text-emerald-400 stroke-[2.2] shrink-0" />
               </div>
               <div>
-                <h3 className="text-[11px] sm:text-base font-bold text-white mb-0.5 sm:mb-1 leading-tight">Get Your Account / Key</h3>
+                <h3 className="text-[11px] sm:text-base font-bold text-white mb-0.5 sm:mb-1 leading-tight flex items-center flex-wrap gap-1">
+                  <span>Get Your</span>
+                  <span className="text-cyan-400">Account,</span>
+                  <span className="text-amber-400">Key</span>
+                  <span className="text-purple-400">& Top-Up</span>
+                </h3>
                 <p className="text-[9px] sm:text-xs text-gray-400 leading-tight sm:leading-relaxed">
-                  Check your order status and view your account or key details.
+                  Check your order status and view your account, key or top-up details.
                 </p>
               </div>
             </div>

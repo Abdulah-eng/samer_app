@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, User, Bot, Headphones, Moon, Key, Edit3 } from 'lucide-react';
-import { getChatMessages, sendChatMessage, getStoreSettings } from '@/lib/store';
+import { MessageSquare, X, Send, User, Bot, Headphones, Moon, Key, Edit3, ShieldCheck, AlertCircle } from 'lucide-react';
+import { getChatMessages, sendChatMessage, getStoreSettings, validateChatRedeemCode } from '@/lib/store';
 import { ChatMessage, StoreSettings } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -39,15 +39,26 @@ export const LiveChatWidget: React.FC = () => {
     }
     setSessionId(sid);
 
-    // Retrieve saved customer key or from URL parameters
+    // Retrieve saved customer key or from URL parameters and strictly validate it
     if (typeof window !== 'undefined') {
       const storedKey = localStorage.getItem('imostrada_chat_customer_key');
       const params = new URLSearchParams(window.location.search);
       const urlCode = params.get('code') || params.get('order');
-      const resolvedKey = urlCode || storedKey || '';
-      if (resolvedKey) {
-        setCustomerKey(resolvedKey);
-        setInputKey(resolvedKey);
+      const candidateKey = urlCode || storedKey || '';
+
+      if (candidateKey) {
+        validateChatRedeemCode(candidateKey).then((check) => {
+          if (check.valid && check.code) {
+            setCustomerKey(check.code);
+            setInputKey(check.code);
+          } else {
+            // If stored key is invalid (e.g. from an invalid test), purge it so customer must provide a real code
+            localStorage.removeItem('imostrada_chat_customer_key');
+            localStorage.removeItem('imostrada_chat_initiated');
+            setCustomerKey('');
+            setInputKey('');
+          }
+        });
       }
     }
 
@@ -117,18 +128,14 @@ export const LiveChatWidget: React.FC = () => {
     }
   }, [messages, isOpen]);
 
-  // Handle first message with key requirement (Chat Initiation)
+  // Handle first message with strict redeem code validation (Chat Initiation)
   const handleInitiateChat = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanKey = inputKey.trim().toUpperCase();
     const cleanMsg = inputMessage.trim();
 
     if (!cleanKey) {
-      setKeyError('Please enter your product key or redeem code.');
-      return;
-    }
-    if (cleanKey.length < 3) {
-      setKeyError('Key must be at least 3 characters long.');
+      setKeyError('Please enter your redeem code.');
       return;
     }
     if (!cleanMsg) {
@@ -140,11 +147,21 @@ export const LiveChatWidget: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      // Validate against database
+      const check = await validateChatRedeemCode(cleanKey);
+      if (!check.valid) {
+        setKeyError(`Invalid redeem code "${cleanKey}". This code was not found in our database.`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      const verifiedCode = check.code || cleanKey;
+
       if (typeof window !== 'undefined') {
-        localStorage.setItem('imostrada_chat_customer_key', cleanKey);
+        localStorage.setItem('imostrada_chat_customer_key', verifiedCode);
         localStorage.setItem('imostrada_chat_initiated', 'true');
       }
-      setCustomerKey(cleanKey);
+      setCustomerKey(verifiedCode);
       setIsEditingKey(false);
       setInputMessage('');
 
@@ -152,21 +169,21 @@ export const LiveChatWidget: React.FC = () => {
         sessionId,
         sender: 'user',
         text: cleanMsg,
-        orderNumber: cleanKey,
-        customerLabel: `Key: ${cleanKey}`,
+        orderNumber: check.orderNumber || verifiedCode,
+        customerLabel: `Code: ${verifiedCode}`,
       });
 
       const updated = await getChatMessages(sessionId);
       setMessages(updated);
     } catch (err) {
       console.error('Error initiating chat', err);
-      setKeyError('Failed to send message. Please try again.');
+      setKeyError('Failed to verify redeem code. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Handle subsequent chat messages (when key is already verified/initiated)
+  // Handle subsequent chat messages (when code is verified and initiated)
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanText = inputMessage.trim();
@@ -181,7 +198,7 @@ export const LiveChatWidget: React.FC = () => {
         sender: 'user',
         text: cleanText,
         orderNumber: activeKey || undefined,
-        customerLabel: activeKey ? `Key: ${activeKey}` : `Customer #${sessionId.slice(-4).toUpperCase()}`,
+        customerLabel: activeKey ? `Code: ${activeKey}` : `Customer #${sessionId.slice(-4).toUpperCase()}`,
       });
       const updated = await getChatMessages(sessionId);
       setMessages(updated);
@@ -268,12 +285,13 @@ export const LiveChatWidget: React.FC = () => {
             </a>
           </div>
 
-          {/* Active Key Status Bar (When conversation is initiated) */}
+          {/* Active Code Status Bar (When conversation is initiated) */}
           {hasInitiated && customerKey && (
             <div className="bg-[#050a14] px-3.5 py-1.5 border-b border-gray-800 flex items-center justify-between text-[11px]">
               <div className="flex items-center space-x-1.5 text-amber-300 font-mono">
-                <Key className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="font-bold truncate max-w-[210px]">Key: {customerKey}</span>
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="font-bold truncate max-w-[210px]">Code: {customerKey}</span>
+                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-sans">Verified</span>
               </div>
               <button
                 type="button"
@@ -282,7 +300,7 @@ export const LiveChatWidget: React.FC = () => {
                   setInputKey(customerKey);
                 }}
                 className="text-[10px] text-gray-400 hover:text-cyan-300 flex items-center space-x-1 transition cursor-pointer"
-                title="Change your registered key"
+                title="Change your redeem code"
               >
                 <Edit3 className="w-3 h-3" />
                 <span>Change</span>
@@ -290,14 +308,14 @@ export const LiveChatWidget: React.FC = () => {
             </div>
           )}
 
-          {/* CASE 1: FIRST MESSAGE / KEY INITIATION SCREEN */}
+          {/* CASE 1: FIRST MESSAGE / REDEEM CODE VERIFICATION SCREEN */}
           {!hasInitiated ? (
             <div className="p-5 flex-1 flex flex-col justify-center space-y-4 bg-[#060a12]">
               {isSleeping && (
                 <div className="bg-amber-950/40 border border-amber-500/30 rounded-xl p-3 text-[11px] text-amber-200 flex items-start gap-2">
                   <span className="text-base shrink-0">🌙</span>
                   <div className="leading-relaxed">
-                    <strong>Support is currently sleeping.</strong> Enter your key and message below, and our agent will answer as soon as we wake up!
+                    <strong>Support is currently sleeping.</strong> Enter your verified redeem code and message below, and our agent will answer as soon as we wake up!
                   </div>
                 </div>
               )}
@@ -306,16 +324,16 @@ export const LiveChatWidget: React.FC = () => {
                 <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto shadow-md">
                   <Key className="w-6 h-6 text-amber-400" />
                 </div>
-                <h5 className="font-black text-sm text-white">Enter Your Key to Start Chat</h5>
+                <h5 className="font-black text-sm text-white">Enter Your Redeem Code to Start</h5>
                 <p className="text-[11px] text-gray-400 leading-relaxed max-w-[280px] mx-auto">
-                  Only customers with a valid product key or redeem code can chat with support. Please enter your key to initiate the conversation.
+                  Only customers with a valid redeem code from our store can access live chat support.
                 </p>
               </div>
 
               <form onSubmit={handleInitiateChat} className="space-y-3 pt-1">
                 <div>
                   <label className="text-[11px] font-bold text-amber-300 flex items-center justify-between mb-1">
-                    <span>Product Key / Redeem Code:</span>
+                    <span>Redeem Code:</span>
                     <span className="text-[10px] text-rose-400 font-bold">*Required</span>
                   </label>
                   <div className="relative">
@@ -334,7 +352,12 @@ export const LiveChatWidget: React.FC = () => {
                     />
                     <Key className="w-4 h-4 text-gray-500 absolute left-3 top-3" />
                   </div>
-                  {keyError && <p className="text-[10px] text-rose-400 font-medium mt-1">{keyError}</p>}
+                  {keyError && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-rose-400 font-medium mt-1.5 bg-rose-950/40 border border-rose-800/60 p-2 rounded-lg">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{keyError}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -347,7 +370,7 @@ export const LiveChatWidget: React.FC = () => {
                     placeholder={
                       isSleeping
                         ? 'Support is sleeping. Write your message here...'
-                        : 'How can we help you with your order or key?'
+                        : 'How can we help you with your order?'
                     }
                     className="w-full bg-[#08111e] border border-gray-700 text-xs text-white rounded-xl p-2.5 outline-none focus:border-amber-400 h-20 resize-none font-sans"
                     required
@@ -360,7 +383,7 @@ export const LiveChatWidget: React.FC = () => {
                   className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 disabled:opacity-40 text-gray-950 font-black rounded-xl text-xs uppercase tracking-wider transition shadow-lg flex items-center justify-center space-x-1.5 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>Start Conversation</span>
+                  <span>{isSubmitting ? 'Verifying Code...' : 'Verify Code & Start Chat'}</span>
                 </button>
 
                 {isEditingKey && (
@@ -369,7 +392,7 @@ export const LiveChatWidget: React.FC = () => {
                     onClick={() => setIsEditingKey(false)}
                     className="w-full text-center text-[10px] text-gray-400 hover:text-gray-200 transition"
                   >
-                    Cancel and keep current key
+                    Cancel and keep current code
                   </button>
                 )}
               </form>

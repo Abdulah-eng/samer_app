@@ -857,3 +857,94 @@ export async function updateStoreSettings(settings: Partial<StoreSettings>): Pro
   setLocal(STORAGE_KEYS.SETTINGS, updated);
   return updated;
 }
+
+// ---------------- CHAT REDEEM CODE VALIDATION ----------------
+export async function validateChatRedeemCode(rawCode: string): Promise<{
+  valid: boolean;
+  code?: string;
+  productName?: string;
+  orderNumber?: string;
+  message: string;
+}> {
+  const clean = rawCode.trim().toUpperCase();
+  if (!clean) {
+    return { valid: false, message: 'Please enter a redeem code.' };
+  }
+
+  try {
+    // 1. Check in Supabase redeem_codes
+    if (isSupabaseConfigured && supabase) {
+      const { data: codeData } = await supabase
+        .from('redeem_codes')
+        .select('*')
+        .ilike('code', clean)
+        .limit(1);
+
+      if (codeData && codeData.length > 0) {
+        const found = codeData[0];
+        return {
+          valid: true,
+          code: found.code,
+          productName: found.product_name,
+          orderNumber: found.code,
+          message: 'Valid redeem code verified!',
+        };
+      }
+
+      // Check in Supabase orders
+      const { data: orderData } = await supabase
+        .from('orders')
+        .select('*')
+        .or(`code.ilike.${clean},order_number.ilike.${clean},top_up_order_number.ilike.${clean}`)
+        .limit(1);
+
+      if (orderData && orderData.length > 0) {
+        const found = orderData[0];
+        return {
+          valid: true,
+          code: found.code || found.order_number,
+          productName: found.product_name,
+          orderNumber: found.order_number,
+          message: 'Valid redeem code verified!',
+        };
+      }
+    }
+
+    // 2. Fallback check in local storage / in-memory store
+    const codes = await getRedeemCodes();
+    const foundCode = codes.find((c) => c.code.toUpperCase() === clean);
+    if (foundCode) {
+      return {
+        valid: true,
+        code: foundCode.code,
+        productName: foundCode.productName,
+        orderNumber: foundCode.code,
+        message: 'Valid redeem code verified!',
+      };
+    }
+
+    const orders = await getOrders();
+    const foundOrder = orders.find(
+      (o) =>
+        o.code.toUpperCase() === clean ||
+        o.orderNumber.toUpperCase() === clean ||
+        (o.topUpOrderNumber && o.topUpOrderNumber.toUpperCase() === clean)
+    );
+    if (foundOrder) {
+      return {
+        valid: true,
+        code: foundOrder.code || foundOrder.orderNumber,
+        productName: foundOrder.productName,
+        orderNumber: foundOrder.orderNumber,
+        message: 'Valid redeem code verified!',
+      };
+    }
+  } catch (err) {
+    console.warn('Error validating chat redeem code:', err);
+  }
+
+  return {
+    valid: false,
+    message: `Invalid redeem code "${clean}". This code was not found in our database.`,
+  };
+}

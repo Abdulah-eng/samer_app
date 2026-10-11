@@ -719,6 +719,22 @@ export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>
   const updated = [...existing, newMsg];
   setLocal(STORAGE_KEYS.CHAT_MESSAGES, updated);
 
+  // Trigger email alert to admin on customer message
+  if (newMsg.sender === 'user' && typeof window !== 'undefined') {
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: newMsg.text,
+        customerCode: newMsg.orderNumber,
+        customerLabel: newMsg.customerLabel,
+        timestamp: newMsg.timestamp,
+      }),
+    }).catch(() => {
+      // non-blocking
+    });
+  }
+
   // Dispatch custom window event so customer widget and admin panel update instantly
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('imostrada_chat_update', { detail: newMsg }));

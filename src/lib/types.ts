@@ -60,10 +60,13 @@ export interface ChatMessage {
   customerLabel?: string;
 }
 
+export type OnlineStatus = 'online' | 'sleeping' | 'offline';
+
 export interface StoreSettings {
   storeName: string;
   merchantName: string;
   isOnline: boolean;
+  onlineStatus?: OnlineStatus;
   noticeText: string;
   customLogoUrl?: string;
   whatsappNumber?: string;

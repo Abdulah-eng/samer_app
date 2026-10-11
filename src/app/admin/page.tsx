@@ -17,8 +17,10 @@ import {
   updateStoreSettings,
   getChatMessages,
   sendChatMessage,
+  deleteChatMessage,
+  deleteChatConversation,
 } from '@/lib/store';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import {
   Product,
   RedeemCode,
@@ -27,6 +29,7 @@ import {
   OrderStatus,
   DeliveryType,
   ChatMessage,
+  OnlineStatus,
 } from '@/lib/types';
 import {
   LayoutDashboard,
@@ -60,6 +63,7 @@ import {
   Bot,
   Volume2,
   VolumeX,
+  Moon,
 } from 'lucide-react';
 
 const ADMIN_PASSCODE = 'admin123';
@@ -165,13 +169,61 @@ export default function AdminPage() {
 
     const handleChatUpdate = () => {
       getChatMessages().then((msgs) => {
-        setChatMessages(msgs);
-        if (soundEnabled) playChime();
+        setChatMessages((prev) => {
+          if (msgs.length > prev.length && soundEnabled) playChime();
+          return msgs;
+        });
       });
     };
 
+    // Cross-device Auto-polling (every 2.5s) to receive messages from mobile or outside devices instantly
+    const interval = setInterval(() => {
+      if (localStorage.getItem('admin_authenticated') === 'true') {
+        getChatMessages().then((latest) => {
+          setChatMessages((prev) => {
+            if (latest.length > prev.length) {
+              if (soundEnabled) playChime();
+              return latest;
+            } else if (
+              latest.length !== prev.length ||
+              (latest.length > 0 && prev.length > 0 && latest[latest.length - 1]?.id !== prev[prev.length - 1]?.id)
+            ) {
+              return latest;
+            }
+            return prev;
+          });
+        });
+      }
+    }, 2500);
+
+    // Supabase Realtime channel for instant cross-device updates
+    let channel: any = null;
+    if (isSupabaseConfigured && supabase) {
+      try {
+        channel = supabase
+          .channel('admin_chat_sync')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => {
+            getChatMessages().then((msgs) => {
+              setChatMessages((prev) => {
+                if (msgs.length > prev.length && soundEnabled) playChime();
+                return msgs;
+              });
+            });
+          })
+          .subscribe();
+      } catch (err) {
+        console.warn('Admin realtime error', err);
+      }
+    }
+
     window.addEventListener('imostrada_chat_update', handleChatUpdate);
-    return () => window.removeEventListener('imostrada_chat_update', handleChatUpdate);
+    return () => {
+      clearInterval(interval);
+      if (channel && supabase) {
+        supabase.removeChannel(channel);
+      }
+      window.removeEventListener('imostrada_chat_update', handleChatUpdate);
+    };
   }, [soundEnabled]);
 
   useEffect(() => {
@@ -378,6 +430,50 @@ export default function AdminPage() {
 
   const [selectedSessionId, setSelectedSessionId] = useState<string>('');
   const [chatSearch, setChatSearch] = useState<string>('');
+  const [chatViewMode, setChatViewMode] = useState<'conversations' | 'allMessages'>('conversations');
+
+  // Delete Single Message
+  const handleDeleteSingleMessage = async (msgId: string) => {
+    if (!window.confirm('Are you sure you want to delete this message?')) return;
+    try {
+      await deleteChatMessage(msgId);
+      showNotification('success', 'Message deleted successfully!');
+      const updated = await getChatMessages();
+      setChatMessages(updated);
+    } catch {
+      showNotification('error', 'Error deleting message');
+    }
+  };
+
+  // Delete Entire Conversation
+  const handleDeleteConversation = async (sessionIdToDelete: string) => {
+    if (!window.confirm('Are you sure you want to delete this entire customer conversation?')) return;
+    try {
+      await deleteChatConversation(sessionIdToDelete);
+      showNotification('success', 'Conversation deleted successfully!');
+      if (selectedSessionId === sessionIdToDelete) {
+        setSelectedSessionId('');
+      }
+      const updated = await getChatMessages();
+      setChatMessages(updated);
+    } catch {
+      showNotification('error', 'Error deleting conversation');
+    }
+  };
+
+  // Quick Online/Sleeping Support Status Toggle
+  const handleQuickStatusToggle = async (status: 'online' | 'sleeping') => {
+    try {
+      const updated = await updateStoreSettings({
+        onlineStatus: status,
+        isOnline: status === 'online',
+      });
+      setSettings(updated);
+      showNotification('success', `Live Support status set to ${status === 'online' ? '🟢 ONLINE' : '🌙 SLEEPING'}!`);
+    } catch {
+      showNotification('error', 'Failed to update status');
+    }
+  };
 
   // Send Chat Message Reply from Admin to Selected Customer
   const handleSendChatReply = async (e: React.FormEvent) => {
@@ -575,7 +671,38 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
+          {/* Quick Support Status Toggle */}
+          <div className="flex items-center bg-gray-950/90 p-1 rounded-xl border border-gray-800 text-xs">
+            <span className="text-[10px] text-gray-400 font-bold uppercase px-2">Support:</span>
+            <button
+              type="button"
+              onClick={() => handleQuickStatusToggle('online')}
+              className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer text-xs ${
+                (settings.onlineStatus || (settings.isOnline ? 'online' : 'offline')) === 'online'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 border border-transparent'
+              }`}
+              title="Set Live Chat Support status to Online"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Online</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickStatusToggle('sleeping')}
+              className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer text-xs ${
+                settings.onlineStatus === 'sleeping'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200 border border-transparent'
+              }`}
+              title="Set Live Chat Support status to Sleeping"
+            >
+              <Moon className="w-3 h-3 text-amber-400" />
+              <span>Sleeping</span>
+            </button>
+          </div>
+
           <Link
             href="/"
             className="text-xs bg-gray-800 hover:bg-gray-700 text-cyan-400 px-3.5 py-2 rounded-lg transition border border-gray-700 flex items-center space-x-1"
@@ -713,10 +840,13 @@ export default function AdminPage() {
             }`}
           >
             <MessageSquare className="w-4 h-4" />
-            <span>Live Chat Inbox ({chatMessages.length})</span>
+            <span>Live Chat Inbox ({allConversations.length})</span>
             {customerMessagesCount > 0 && (
-              <span className="bg-emerald-500 text-gray-950 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full">
-                {customerMessagesCount}
+              <span
+                className="bg-emerald-500 text-gray-950 text-[10px] font-extrabold px-2 py-0.5 rounded-full"
+                title={`${customerMessagesCount} customer messages received`}
+              >
+                {customerMessagesCount} msgs
               </span>
             )}
           </button>
@@ -1239,7 +1369,7 @@ export default function AdminPage() {
 
         {/* TAB 4: LIVE CHAT INBOX (Multi-Customer Messenger System) */}
         {activeTab === 'chat' && (
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row h-[700px]">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row h-[720px]">
             {/* LEFT COLUMN: Customer Conversations List */}
             <div className="w-full md:w-80 border-r border-gray-800 flex flex-col bg-[#070e1a] shrink-0">
               {/* Header */}
@@ -1270,6 +1400,34 @@ export default function AdminPage() {
                 </div>
               </div>
 
+              {/* View Mode Switcher */}
+              <div className="px-3 pt-3 pb-1 border-b border-gray-800/80">
+                <div className="grid grid-cols-2 gap-1 bg-[#050912] p-1 rounded-lg border border-gray-800 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setChatViewMode('conversations')}
+                    className={`py-1.5 px-2 rounded-md font-semibold transition cursor-pointer text-center ${
+                      chatViewMode === 'conversations'
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    💬 Customers ({allConversations.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChatViewMode('allMessages')}
+                    className={`py-1.5 px-2 rounded-md font-semibold transition cursor-pointer text-center ${
+                      chatViewMode === 'allMessages'
+                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    📋 All Msgs ({chatMessages.length})
+                  </button>
+                </div>
+              </div>
+
               {/* Search Conversations */}
               <div className="p-3 border-b border-gray-800">
                 <div className="relative">
@@ -1292,13 +1450,15 @@ export default function AdminPage() {
                   </div>
                 ) : (
                   filteredConversations.map((conv) => {
-                    const isSelected = conv.sessionId === activeSessionId;
+                    const isSelected = conv.sessionId === activeSessionId && chatViewMode === 'conversations';
                     return (
-                      <button
+                      <div
                         key={conv.sessionId}
-                        type="button"
-                        onClick={() => setSelectedSessionId(conv.sessionId)}
-                        className={`w-full p-3.5 text-left flex items-start gap-3 transition cursor-pointer ${
+                        onClick={() => {
+                          setSelectedSessionId(conv.sessionId);
+                          setChatViewMode('conversations');
+                        }}
+                        className={`w-full p-3.5 text-left flex items-start gap-3 transition cursor-pointer group ${
                           isSelected
                             ? 'bg-[#0e1d33] border-l-4 border-l-cyan-400'
                             : 'hover:bg-[#0a1424] border-l-4 border-l-transparent'
@@ -1325,176 +1485,308 @@ export default function AdminPage() {
                             {conv.lastMessage}
                           </p>
 
-                          <div className="flex items-center gap-1.5 mt-1.5">
-                            {conv.orderNumber && (
-                              <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-1.5 py-0.2 rounded font-mono text-[9px] font-bold">
-                                #{conv.orderNumber}
+                          <div className="flex items-center justify-between mt-1.5">
+                            <div className="flex items-center gap-1.5">
+                              {conv.orderNumber && (
+                                <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-1.5 py-0.2 rounded font-mono text-[9px] font-bold">
+                                  #{conv.orderNumber}
+                                </span>
+                              )}
+                              <span className="text-[9px] text-gray-500">
+                                {conv.messages.length} msg{conv.messages.length > 1 ? 's' : ''}
                               </span>
-                            )}
-                            <span className="text-[9px] text-gray-500">
-                              {conv.messages.length} msg{conv.messages.length > 1 ? 's' : ''}
-                            </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteConversation(conv.sessionId);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-rose-400 hover:bg-rose-950/50 rounded transition cursor-pointer"
+                              title="Delete this entire customer conversation"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
-                      </button>
+                      </div>
                     );
                   })
                 )}
               </div>
             </div>
 
-            {/* RIGHT COLUMN: Active Chat Messages Thread */}
-            <div className="flex-1 flex flex-col bg-[#060a12] min-w-0">
-              {/* Active Conversation Header */}
-              <div className="p-4 bg-[#09111d] border-b border-gray-800 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-9 h-9 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 flex items-center justify-center font-bold text-xs">
-                    <User className="w-5 h-5" />
-                  </div>
+            {/* RIGHT COLUMN: Chat View (Either Active Thread OR All Messages Stream) */}
+            {chatViewMode === 'allMessages' ? (
+              <div className="flex-1 flex flex-col bg-[#060a12] min-w-0">
+                {/* All Messages Header */}
+                <div className="p-4 bg-[#09111d] border-b border-gray-800 flex items-center justify-between">
                   <div>
                     <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                      <span>{activeConversation?.customerLabel || 'Customer'}</span>
-                      {activeConversation?.orderNumber && (
-                        <span className="bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] px-2 py-0.5 rounded font-mono font-bold">
-                          Order #{activeConversation.orderNumber}
-                        </span>
-                      )}
+                      <span>All Messages Stream</span>
+                      <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[10px] px-2 py-0.5 rounded font-mono font-bold">
+                        {chatMessages.length} total messages
+                      </span>
                     </h4>
-                    <div className="flex items-center space-x-2 text-[10px] text-gray-400 mt-0.5">
-                      <span className="text-emerald-400">● Live Customer Thread</span>
-                      <span>•</span>
-                      <span className="font-mono text-gray-500">ID: {activeConversation?.sessionId}</span>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      Showing every message received across all devices & customer sessions.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setChatViewMode('conversations')}
+                    className="text-xs bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 px-3 py-1.5 rounded-lg transition cursor-pointer"
+                  >
+                    ← View Customer Threads
+                  </button>
+                </div>
+
+                {/* All Messages Feed */}
+                <div className="flex-1 p-5 overflow-y-auto space-y-3 bg-[#060a12]">
+                  {chatMessages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-2">
+                      <MessageSquare className="w-8 h-8 opacity-40" />
+                      <p className="text-xs">No chat messages in database yet.</p>
                     </div>
+                  ) : (
+                    chatMessages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className="group p-3.5 rounded-xl bg-[#09111d] border border-gray-800/90 hover:border-gray-700 transition flex items-start justify-between gap-3 shadow-sm"
+                      >
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          <div
+                            className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
+                              msg.sender === 'user'
+                                ? 'bg-amber-500 text-gray-950 shadow-md shadow-amber-500/20'
+                                : 'bg-cyan-500 text-gray-950 shadow-md shadow-cyan-500/20'
+                            }`}
+                          >
+                            {msg.sender === 'user' ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className="font-bold text-xs text-white">
+                                {msg.sender === 'user'
+                                  ? (msg.customerLabel || `Customer #${(msg.sessionId || '').slice(-4).toUpperCase()}`)
+                                  : 'Admin Support'}
+                              </span>
+                              {msg.orderNumber && (
+                                <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[9px] px-1.5 py-0.2 rounded font-mono font-bold">
+                                  #{msg.orderNumber}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-gray-500">{msg.timestamp}</span>
+                              <span className="text-[10px] text-gray-600 font-mono">({msg.sessionId || 'general'})</span>
+                            </div>
+                            <p className="text-xs text-gray-200 whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedSessionId(msg.sessionId || 'general');
+                              setChatViewMode('conversations');
+                            }}
+                            className="text-[11px] bg-gray-800 hover:bg-gray-700 text-cyan-300 px-2.5 py-1 rounded-md border border-gray-700 transition cursor-pointer"
+                          >
+                            Open Thread
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSingleMessage(msg.id)}
+                            className="p-1.5 text-gray-500 hover:text-rose-400 hover:bg-rose-950/50 rounded-md transition cursor-pointer"
+                            title="Delete this message"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col bg-[#060a12] min-w-0">
+                {/* Active Conversation Header */}
+                <div className="p-4 bg-[#09111d] border-b border-gray-800 flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-9 h-9 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 flex items-center justify-center font-bold text-xs">
+                      <User className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>{activeConversation?.customerLabel || 'Customer'}</span>
+                        {activeConversation?.orderNumber && (
+                          <span className="bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] px-2 py-0.5 rounded font-mono font-bold">
+                            Order #{activeConversation.orderNumber}
+                          </span>
+                        )}
+                      </h4>
+                      <div className="flex items-center space-x-2 text-[10px] text-gray-400 mt-0.5">
+                        <span className="text-emerald-400">● Live Customer Thread</span>
+                        <span>•</span>
+                        <span className="font-mono text-gray-500">ID: {activeConversation?.sessionId}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    {activeConversation?.orderNumber && (
+                      <button
+                        onClick={() => {
+                          setSearchQuery(activeConversation.orderNumber!);
+                          setActiveTab('orders');
+                        }}
+                        className="text-[11px] bg-gray-800 hover:bg-gray-700 text-cyan-300 px-3 py-1.5 rounded-lg border border-gray-700 transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>View in Orders Tab</span>
+                      </button>
+                    )}
+                    {activeConversation && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteConversation(activeConversation.sessionId)}
+                        className="text-[11px] bg-rose-950/50 hover:bg-rose-900/70 text-rose-300 px-3 py-1.5 rounded-lg border border-rose-800/60 transition flex items-center gap-1 cursor-pointer"
+                        title="Delete this entire customer conversation"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Chat</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {activeConversation?.orderNumber && (
+                {/* Quick Answers Bar */}
+                <div className="bg-[#070e1a] px-4 py-2 border-b border-gray-800 flex items-center gap-2 overflow-x-auto text-[11px]">
+                  <span className="text-gray-400 font-bold shrink-0">Quick Answers:</span>
                   <button
-                    onClick={() => {
-                      setSearchQuery(activeConversation.orderNumber!);
-                      setActiveTab('orders');
-                    }}
-                    className="text-[11px] bg-gray-800 hover:bg-gray-700 text-cyan-300 px-3 py-1.5 rounded-lg border border-gray-700 transition flex items-center gap-1 cursor-pointer"
+                    type="button"
+                    onClick={() =>
+                      setChatReply('Hello! Welcome to IMOSTRADA support. How can I assist you with your order or top-up today?')
+                    }
+                    className="bg-gray-800 hover:bg-gray-700 text-cyan-300 px-2.5 py-1 rounded-full whitespace-nowrap transition cursor-pointer text-[10px]"
                   >
-                    <span>View in Orders Tab</span>
+                    👋 Welcome
                   </button>
-                )}
-              </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setChatReply(
+                        'We have received your top-up request! Our team is processing it right now. Usually takes 5-30 minutes.'
+                      )
+                    }
+                    className="bg-gray-800 hover:bg-gray-700 text-amber-300 px-2.5 py-1 rounded-full whitespace-nowrap transition cursor-pointer text-[10px]"
+                  >
+                    ⏳ Top-Up Processing
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setChatReply(
+                        'Your top-up has been completed successfully! Please open your game to verify your balance. Enjoy!'
+                      )
+                    }
+                    className="bg-gray-800 hover:bg-gray-700 text-emerald-300 px-2.5 py-1 rounded-full whitespace-nowrap transition cursor-pointer text-[10px]"
+                  >
+                    ✅ Top-Up Completed
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setChatReply('Could you please provide your marketplace order number (e.g. from GAMIVO, G2A or Driffle)?')
+                    }
+                    className="bg-gray-800 hover:bg-gray-700 text-purple-300 px-2.5 py-1 rounded-full whitespace-nowrap transition cursor-pointer text-[10px]"
+                  >
+                    ❓ Request Order #
+                  </button>
+                </div>
 
-              {/* Quick Answers Bar */}
-              <div className="bg-[#070e1a] px-4 py-2 border-b border-gray-800 flex items-center gap-2 overflow-x-auto text-[11px]">
-                <span className="text-gray-400 font-bold shrink-0">Quick Answers:</span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setChatReply('Hello! Welcome to IMOSTRADA support. How can I assist you with your order or top-up today?')
-                  }
-                  className="bg-gray-800 hover:bg-gray-700 text-cyan-300 px-2.5 py-1 rounded-full whitespace-nowrap transition cursor-pointer text-[10px]"
-                >
-                  👋 Welcome
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setChatReply(
-                      'We have received your top-up request! Our team is processing it right now. Usually takes 5-30 minutes.'
-                    )
-                  }
-                  className="bg-gray-800 hover:bg-gray-700 text-amber-300 px-2.5 py-1 rounded-full whitespace-nowrap transition cursor-pointer text-[10px]"
-                >
-                  ⏳ Top-Up Processing
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setChatReply(
-                      'Your top-up has been completed successfully! Please open your game to verify your balance. Enjoy!'
-                    )
-                  }
-                  className="bg-gray-800 hover:bg-gray-700 text-emerald-300 px-2.5 py-1 rounded-full whitespace-nowrap transition cursor-pointer text-[10px]"
-                >
-                  ✅ Top-Up Completed
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setChatReply('Could you please provide your marketplace order number (e.g. from GAMIVO, G2A or Driffle)?')
-                  }
-                  className="bg-gray-800 hover:bg-gray-700 text-purple-300 px-2.5 py-1 rounded-full whitespace-nowrap transition cursor-pointer text-[10px]"
-                >
-                  ❓ Request Order #
-                </button>
-              </div>
-
-              {/* Messages Thread for Selected Customer */}
-              <div className="flex-1 p-5 overflow-y-auto space-y-3.5 bg-[#060a12]">
-                {activeMessages.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-2">
-                    <MessageSquare className="w-8 h-8 opacity-40" />
-                    <p className="text-xs">No messages in this conversation yet.</p>
-                  </div>
-                ) : (
-                  activeMessages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`flex items-start gap-3 ${
-                        msg.sender === 'agent' ? 'flex-row-reverse' : ''
-                      }`}
-                    >
+                {/* Messages Thread for Selected Customer */}
+                <div className="flex-1 p-5 overflow-y-auto space-y-3.5 bg-[#060a12]">
+                  {activeMessages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-2">
+                      <MessageSquare className="w-8 h-8 opacity-40" />
+                      <p className="text-xs">No messages in this conversation yet.</p>
+                    </div>
+                  ) : (
+                    activeMessages.map((msg) => (
                       <div
-                        className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
-                          msg.sender === 'user'
-                            ? 'bg-amber-500 text-gray-950 shadow-md shadow-amber-500/20'
-                            : 'bg-cyan-500 text-gray-950 shadow-md shadow-cyan-500/20'
+                        key={msg.id}
+                        className={`group flex items-start gap-3 ${
+                          msg.sender === 'agent' ? 'flex-row-reverse' : ''
                         }`}
                       >
-                        {msg.sender === 'user' ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
-                      </div>
-
-                      <div className="max-w-[75%] space-y-1">
-                        <div className="flex items-center gap-2 text-[10px] text-gray-400">
-                          <span className="font-bold text-gray-300">
-                            {msg.sender === 'user' ? (msg.customerLabel || 'Customer') : 'Admin Support (You)'}
-                          </span>
-                          <span>•</span>
-                          <span>{msg.timestamp}</span>
-                        </div>
-
                         <div
-                          className={`p-3 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap ${
+                          className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
                             msg.sender === 'user'
-                              ? 'bg-[#0d1829] border border-gray-800 text-gray-100 rounded-tl-none font-medium'
-                              : 'bg-cyan-950/60 border border-cyan-800/80 text-cyan-100 rounded-tr-none font-sans'
+                              ? 'bg-amber-500 text-gray-950 shadow-md shadow-amber-500/20'
+                              : 'bg-cyan-500 text-gray-950 shadow-md shadow-cyan-500/20'
                           }`}
                         >
-                          {msg.text}
+                          {msg.sender === 'user' ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
+                        </div>
+
+                        <div className={`max-w-[75%] space-y-1 ${msg.sender === 'agent' ? 'text-right' : ''}`}>
+                          <div
+                            className={`flex items-center gap-2 text-[10px] text-gray-400 ${
+                              msg.sender === 'agent' ? 'justify-end' : ''
+                            }`}
+                          >
+                            <span className="font-bold text-gray-300">
+                              {msg.sender === 'user' ? (msg.customerLabel || 'Customer') : 'Admin Support (You)'}
+                            </span>
+                            <span>•</span>
+                            <span>{msg.timestamp}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSingleMessage(msg.id)}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-rose-400 hover:bg-rose-950/40 rounded transition cursor-pointer"
+                              title="Delete this message"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+
+                          <div
+                            className={`p-3 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap text-left ${
+                              msg.sender === 'user'
+                                ? 'bg-[#0d1829] border border-gray-800 text-gray-100 rounded-tl-none font-medium'
+                                : 'bg-cyan-950/60 border border-cyan-800/80 text-cyan-100 rounded-tr-none font-sans'
+                            }`}
+                          >
+                            {msg.text}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
-                )}
-                <div ref={chatScrollRef} />
-              </div>
+                    ))
+                  )}
+                  <div ref={chatScrollRef} />
+                </div>
 
-              {/* Reply Input Form */}
-              <form onSubmit={handleSendChatReply} className="p-3 bg-[#09111d] border-t border-gray-800 flex gap-2">
-                <input
-                  type="text"
-                  value={chatReply}
-                  onChange={(e) => setChatReply(e.target.value)}
-                  placeholder={`Reply to ${activeConversation?.customerLabel || 'customer'}...`}
-                  className="flex-1 bg-[#060a12] border border-gray-700 text-xs text-white rounded-xl py-3 px-4 outline-none focus:border-cyan-400 font-sans"
-                />
-                <button
-                  type="submit"
-                  disabled={!chatReply.trim()}
-                  className="px-5 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-gray-950 font-bold text-xs uppercase tracking-wider transition flex items-center space-x-1.5 shadow-md cursor-pointer"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>Send Reply</span>
-                </button>
-              </form>
-            </div>
+                {/* Reply Input Form */}
+                <form onSubmit={handleSendChatReply} className="p-3 bg-[#09111d] border-t border-gray-800 flex gap-2">
+                  <input
+                    type="text"
+                    value={chatReply}
+                    onChange={(e) => setChatReply(e.target.value)}
+                    placeholder={`Reply to ${activeConversation?.customerLabel || 'customer'}...`}
+                    className="flex-1 bg-[#060a12] border border-gray-700 text-xs text-white rounded-xl py-3 px-4 outline-none focus:border-cyan-400 font-sans"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!chatReply.trim()}
+                    className="px-5 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-gray-950 font-bold text-xs uppercase tracking-wider transition flex items-center space-x-1.5 shadow-md cursor-pointer"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>Send Reply</span>
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         )}
 
@@ -1530,14 +1822,22 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="text-gray-300 font-semibold block mb-1">Store Online Status:</label>
+                <label className="text-gray-300 font-semibold block mb-1">Store & Live Support Status:</label>
                 <select
-                  value={settings.isOnline ? 'true' : 'false'}
-                  onChange={(e) => setSettings({ ...settings, isOnline: e.target.value === 'true' })}
+                  value={settings.onlineStatus || (settings.isOnline ? 'online' : 'offline')}
+                  onChange={(e) => {
+                    const val = e.target.value as 'online' | 'sleeping' | 'offline';
+                    setSettings({
+                      ...settings,
+                      onlineStatus: val,
+                      isOnline: val === 'online',
+                    });
+                  }}
                   className="w-full bg-gray-950 border border-gray-700 text-white rounded-lg p-3 outline-none"
                 >
-                  <option value="true">🟢 Online (Accepting Redemptions)</option>
-                  <option value="false">🔴 Maintenance (Offline Mode)</option>
+                  <option value="online">🟢 Online (Support Active & Answering Live)</option>
+                  <option value="sleeping">🌙 Sleeping (Support Away / Sleeping - Back Soon)</option>
+                  <option value="offline">🔴 Maintenance (Offline Mode)</option>
                 </select>
               </div>
 

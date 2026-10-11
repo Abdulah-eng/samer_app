@@ -106,22 +106,42 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
 
         {/* RIGHT: Status + Language + Admin */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Online status pill */}
+          {/* Online / Sleeping status pill */}
           <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-medium text-gray-300 bg-[#0d1629] px-2.5 sm:px-3 py-1.5 rounded-full border border-white/10 shrink-0">
-            <span
-              className="w-2 h-2 rounded-full shrink-0"
-              style={{
-                background: settings.isOnline ? '#22c55e' : '#ef4444',
-                boxShadow: settings.isOnline ? '0 0 6px #22c55e' : '0 0 6px #ef4444',
-                animation: settings.isOnline ? 'pulse 2s infinite' : 'none',
-              }}
-            />
-            <span className="hidden xs:inline">
-              We are currently:{' '}
-            </span>
-            <strong style={{ color: settings.isOnline ? '#22c55e' : '#ef4444' }}>
-              {settings.isOnline ? 'ONLINE' : 'OFFLINE'}
-            </strong>
+            {settings.onlineStatus === 'sleeping' ? (
+              <>
+                <span
+                  className="w-2 h-2 rounded-full shrink-0 bg-amber-400"
+                  style={{ boxShadow: '0 0 6px #f59e0b' }}
+                />
+                <span className="hidden xs:inline">We are currently: </span>
+                <strong className="text-amber-400 flex items-center gap-1">
+                  <span>SLEEPING</span>
+                  <span>🌙</span>
+                </strong>
+              </>
+            ) : settings.isOnline ? (
+              <>
+                <span
+                  className="w-2 h-2 rounded-full shrink-0 bg-emerald-500"
+                  style={{
+                    boxShadow: '0 0 6px #22c55e',
+                    animation: 'pulse 2s infinite',
+                  }}
+                />
+                <span className="hidden xs:inline">We are currently: </span>
+                <strong className="text-emerald-400">ONLINE</strong>
+              </>
+            ) : (
+              <>
+                <span
+                  className="w-2 h-2 rounded-full shrink-0 bg-rose-500"
+                  style={{ boxShadow: '0 0 6px #ef4444' }}
+                />
+                <span className="hidden xs:inline">We are currently: </span>
+                <strong className="text-rose-400">OFFLINE</strong>
+              </>
+            )}
           </div>
 
           {/* Language Translator Dropdown */}

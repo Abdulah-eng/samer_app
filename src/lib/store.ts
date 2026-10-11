@@ -73,6 +73,7 @@ const INITIAL_SETTINGS: StoreSettings = {
   storeName: 'IMOSTRADA',
   merchantName: 'imostrada',
   isOnline: true,
+  onlineStatus: 'online',
   noticeText:
     'Delivery time starts after the redeem request is submitted. Products are delivered between 1 hour to 24 hours.',
   whatsappNumber: '+1234567890',
@@ -716,58 +717,140 @@ export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>
   return newMsg;
 }
 
+export async function deleteChatMessage(id: string): Promise<boolean> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { error } = await supabase.from('chat_messages').delete().eq('id', id);
+      if (error) console.warn('Supabase deleteChatMessage error', error);
+    } catch (e) {
+      console.warn('Supabase deleteChatMessage catch', e);
+    }
+  }
+
+  const existing = getLocal<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, []);
+  const updated = existing.filter((m) => m.id !== id);
+  setLocal(STORAGE_KEYS.CHAT_MESSAGES, updated);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('imostrada_chat_update'));
+  }
+  return true;
+}
+
+export async function deleteChatConversation(sessionId: string): Promise<boolean> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      let query = supabase.from('chat_messages').delete();
+      if (sessionId === 'general') {
+        query = query.or(`session_id.eq.general,session_id.is.null`);
+      } else {
+        query = query.eq('session_id', sessionId);
+      }
+      const { error } = await query;
+      if (error) console.warn('Supabase deleteChatConversation error', error);
+    } catch (e) {
+      console.warn('Supabase deleteChatConversation catch', e);
+    }
+  }
+
+  const existing = getLocal<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, []);
+  const updated = existing.filter((m) => (m.sessionId || 'general') !== sessionId);
+  setLocal(STORAGE_KEYS.CHAT_MESSAGES, updated);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('imostrada_chat_update'));
+  }
+  return true;
+}
+
 // ---------------- STORE SETTINGS SERVICE ----------------
 export async function getStoreSettings(): Promise<StoreSettings> {
   if (isSupabaseConfigured && supabase) {
     const { data } = await supabase.from('store_settings').select('*').single();
     if (data) {
+      let onlineStatus: import('./types').OnlineStatus = 'online';
+      if (data.online_status) {
+        onlineStatus = data.online_status;
+      } else if (data.is_online === false) {
+        onlineStatus = 'offline';
+      }
       return {
         storeName: data.store_name,
         merchantName: data.merchant_name,
-        isOnline: data.is_online,
+        isOnline: data.is_online !== false && onlineStatus !== 'offline',
+        onlineStatus,
         noticeText: data.notice_text,
         whatsappNumber: data.whatsapp_number,
         telegramUsername: data.telegram_username,
       };
     }
   }
-  return getLocal<StoreSettings>(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
+  const local = getLocal<StoreSettings>(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
+  return {
+    ...local,
+    onlineStatus: local.onlineStatus || (local.isOnline ? 'online' : 'offline'),
+  };
 }
 
 export async function updateStoreSettings(settings: Partial<StoreSettings>): Promise<StoreSettings> {
   const current = await getStoreSettings();
-  const updated = { ...current, ...settings };
+  const effectiveOnlineStatus =
+    settings.onlineStatus ||
+    (settings.isOnline === false ? 'offline' : current.onlineStatus || 'online');
+  const effectiveIsOnline =
+    effectiveOnlineStatus !== 'offline' && (settings.isOnline !== undefined ? settings.isOnline : true);
+
+  const updated: StoreSettings = {
+    ...current,
+    ...settings,
+    isOnline: effectiveIsOnline,
+    onlineStatus: effectiveOnlineStatus,
+  };
 
   if (isSupabaseConfigured && supabase) {
     // 1. Try updating row id: 1
-    const { data: updateData, error: updateError } = await supabase
+    const updatePayload: any = {
+      store_name: updated.storeName,
+      merchant_name: updated.merchantName,
+      is_online: updated.isOnline,
+      notice_text: updated.noticeText,
+    };
+    if (updated.onlineStatus) {
+      updatePayload.online_status = updated.onlineStatus;
+    }
+
+    let { data: updateData, error: updateError } = await supabase
       .from('store_settings')
-      .update({
-        store_name: updated.storeName,
-        merchant_name: updated.merchantName,
-        is_online: updated.isOnline,
-        notice_text: updated.noticeText,
-      })
+      .update(updatePayload)
       .eq('id', 1)
       .select();
+
+    // Fallback if online_status column does not exist yet on Supabase table
+    if (updateError && updatePayload.online_status) {
+      delete updatePayload.online_status;
+      const retry = await supabase
+        .from('store_settings')
+        .update(updatePayload)
+        .eq('id', 1)
+        .select();
+      updateData = retry.data;
+      updateError = retry.error;
+    }
 
     // 2. If row id: 1 does not exist, insert it
     if (!updateError && (!updateData || updateData.length === 0)) {
       const { error: insertError } = await supabase.from('store_settings').insert({
         id: 1,
-        store_name: updated.storeName,
-        merchant_name: updated.merchantName,
-        is_online: updated.isOnline,
-        notice_text: updated.noticeText,
+        ...updatePayload,
       });
 
       if (insertError) {
         console.error('Supabase insert store_settings error:', insertError);
-        throw new Error(`Database error saving store settings: ${insertError.message}. Please verify Supabase RLS permissions.`);
+        throw new Error(`Database error saving store settings: ${insertError.message}`);
       }
     } else if (updateError) {
       console.error('Supabase update store_settings error:', updateError);
-      throw new Error(`Database error updating store settings: ${updateError.message}. Please verify Supabase RLS permissions.`);
+      throw new Error(`Database error updating store settings: ${updateError.message}`);
     }
   }
 

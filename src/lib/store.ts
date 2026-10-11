@@ -136,7 +136,12 @@ export async function addProduct(product: Omit<Product, 'id' | 'createdAt'>): Pr
       .select()
       .single();
 
-    if (!error && data) {
+    if (error) {
+      console.error('Supabase addProduct error:', error);
+      throw new Error(`Database error adding product: ${error.message}. Please verify Supabase RLS permissions.`);
+    }
+
+    if (data) {
       return {
         id: data.id,
         name: data.name,
@@ -157,7 +162,11 @@ export async function addProduct(product: Omit<Product, 'id' | 'createdAt'>): Pr
 export async function deleteProduct(id: string): Promise<boolean> {
   if (isSupabaseConfigured && supabase) {
     const { error } = await supabase.from('products').delete().eq('id', id);
-    if (!error) return true;
+    if (error) {
+      console.error('Supabase deleteProduct error:', error);
+      throw new Error(`Database error deleting product: ${error.message}. Please verify Supabase RLS permissions.`);
+    }
+    return true;
   }
   const products = await getProducts();
   const updated = products.filter((p) => p.id !== id);
@@ -730,13 +739,36 @@ export async function updateStoreSettings(settings: Partial<StoreSettings>): Pro
   const updated = { ...current, ...settings };
 
   if (isSupabaseConfigured && supabase) {
-    await supabase.from('store_settings').upsert({
-      id: 1,
-      store_name: updated.storeName,
-      merchant_name: updated.merchantName,
-      is_online: updated.isOnline,
-      notice_text: updated.noticeText,
-    });
+    // 1. Try updating row id: 1
+    const { data: updateData, error: updateError } = await supabase
+      .from('store_settings')
+      .update({
+        store_name: updated.storeName,
+        merchant_name: updated.merchantName,
+        is_online: updated.isOnline,
+        notice_text: updated.noticeText,
+      })
+      .eq('id', 1)
+      .select();
+
+    // 2. If row id: 1 does not exist, insert it
+    if (!updateError && (!updateData || updateData.length === 0)) {
+      const { error: insertError } = await supabase.from('store_settings').insert({
+        id: 1,
+        store_name: updated.storeName,
+        merchant_name: updated.merchantName,
+        is_online: updated.isOnline,
+        notice_text: updated.noticeText,
+      });
+
+      if (insertError) {
+        console.error('Supabase insert store_settings error:', insertError);
+        throw new Error(`Database error saving store settings: ${insertError.message}. Please verify Supabase RLS permissions.`);
+      }
+    } else if (updateError) {
+      console.error('Supabase update store_settings error:', updateError);
+      throw new Error(`Database error updating store settings: ${updateError.message}. Please verify Supabase RLS permissions.`);
+    }
   }
 
   setLocal(STORAGE_KEYS.SETTINGS, updated);

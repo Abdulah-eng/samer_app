@@ -408,8 +408,10 @@ export default function AdminPage() {
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await updateStoreSettings(settings);
-      showNotification('success', 'Store settings updated!');
+      const updated = await updateStoreSettings(settings);
+      setSettings(updated);
+      showNotification('success', 'Store settings updated successfully!');
+      loadAllData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error saving settings';
       showNotification('error', msg);

@@ -132,19 +132,19 @@ ALTER TABLE store_settings ENABLE ROW LEVEL SECURITY;
 -- Drop old policies if they exist before recreating to avoid duplicate policy errors
 DROP POLICY IF EXISTS "Public Read Products" ON products;
 DROP POLICY IF EXISTS "Public Full Access Products" ON products;
-CREATE POLICY "Public Full Access Products" ON products FOR ALL USING (true);
+CREATE POLICY "Public Full Access Products" ON products FOR ALL TO public USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Public Read Store Settings" ON store_settings;
 DROP POLICY IF EXISTS "Public Full Access Store Settings" ON store_settings;
-CREATE POLICY "Public Full Access Store Settings" ON store_settings FOR ALL USING (true);
+CREATE POLICY "Public Full Access Store Settings" ON store_settings FOR ALL TO public USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Public Read & Insert Redeem Codes" ON redeem_codes;
 DROP POLICY IF EXISTS "Public Full Access Redeem Codes" ON redeem_codes;
-CREATE POLICY "Public Full Access Redeem Codes" ON redeem_codes FOR ALL USING (true);
+CREATE POLICY "Public Full Access Redeem Codes" ON redeem_codes FOR ALL TO public USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Public Read & Insert Orders" ON orders;
 DROP POLICY IF EXISTS "Public Full Access Orders" ON orders;
-CREATE POLICY "Public Full Access Orders" ON orders FOR ALL USING (true);
+CREATE POLICY "Public Full Access Orders" ON orders FOR ALL TO public USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Public Full Access Chat Messages" ON chat_messages;
-CREATE POLICY "Public Full Access Chat Messages" ON chat_messages FOR ALL USING (true);
+CREATE POLICY "Public Full Access Chat Messages" ON chat_messages FOR ALL TO public USING (true) WITH CHECK (true);

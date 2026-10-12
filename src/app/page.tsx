@@ -164,62 +164,62 @@ export default function HomePage() {
 
             {/* Big hero heading */}
             <div className="space-y-2">
-              <h1 className="text-4xl sm:text-5xl lg:text-[52px] font-black leading-[1.1] tracking-tight text-white">
+              <h1 className="text-3xl sm:text-5xl lg:text-[52px] font-black leading-[1.15] tracking-tight text-white">
                 Redeem Your Code
               </h1>
-              <div className="text-3xl sm:text-4xl lg:text-[44px] font-black leading-[1.2] tracking-tight flex flex-wrap items-center gap-x-3.5 gap-y-2 pt-0.5">
+              <div className="text-2xl sm:text-4xl lg:text-[44px] font-black leading-[1.25] tracking-tight flex flex-wrap items-center gap-x-2.5 sm:gap-x-3.5 gap-y-1.5 sm:gap-y-2 pt-0.5">
                 <span className="text-white">Get Your</span>
-                <span className="inline-flex items-center gap-2 text-cyan-400">
-                  <User className="w-7 h-7 sm:w-9 sm:h-9 text-cyan-400 stroke-[2.6]" />
+                <span className="inline-flex items-center gap-1.5 sm:gap-2 text-cyan-400">
+                  <User className="w-5 h-5 sm:w-8 sm:h-8 lg:w-9 lg:h-9 text-cyan-400 stroke-[2.6]" />
                   <span>Account</span>
                 </span>
-                <span className="inline-flex items-center gap-2 text-amber-400">
-                  <Key className="w-7 h-7 sm:w-9 sm:h-9 text-amber-400 stroke-[2.6]" />
+                <span className="inline-flex items-center gap-1.5 sm:gap-2 text-amber-400">
+                  <Key className="w-5 h-5 sm:w-8 sm:h-8 lg:w-9 lg:h-9 text-amber-400 stroke-[2.6]" />
                   <span>Key</span>
                 </span>
-                <span className="inline-flex items-center gap-2 text-purple-400">
-                  <Coins className="w-7 h-7 sm:w-9 sm:h-9 text-purple-400 stroke-[2.6]" />
+                <span className="inline-flex items-center gap-1.5 sm:gap-2 text-purple-400">
+                  <Coins className="w-5 h-5 sm:w-8 sm:h-8 lg:w-9 lg:h-9 text-purple-400 stroke-[2.6]" />
                   <span>Top-Up</span>
                 </span>
               </div>
             </div>
 
-            <p className="text-sm text-gray-300 leading-relaxed max-w-xs">
+            <p className="text-xs sm:text-sm text-gray-300 leading-relaxed max-w-sm sm:max-w-md">
               Enter your redeem code below to receive your digital product. Fast, secure and easy delivery.
             </p>
 
-            {/* 3 horizontal feature badges below text — matching image.png exactly */}
-            <div className="flex items-start gap-6 pt-4 border-t border-white/10">
+            {/* 3 feature badges below text — responsive grid on mobile, flex on desktop */}
+            <div className="grid grid-cols-3 gap-2 sm:flex sm:items-start sm:gap-6 pt-4 border-t border-white/10">
               {/* Fast Delivery */}
-              <div className="flex flex-col items-start gap-1.5">
-                <div className="w-10 h-10 rounded-full border-2 border-amber-400/60 bg-amber-400/10 flex items-center justify-center">
-                  <Zap className="w-5 h-5 text-amber-400 fill-amber-400" />
+              <div className="flex flex-col items-start gap-1 sm:gap-1.5">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-amber-400/60 bg-amber-400/10 flex items-center justify-center shrink-0">
+                  <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 fill-amber-400" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-white">Fast Delivery</div>
-                  <div className="text-[11px] text-gray-400">Usually 1h – 24h</div>
+                  <div className="text-[11px] sm:text-xs font-bold text-white leading-tight">Fast Delivery</div>
+                  <div className="text-[9px] sm:text-[11px] text-gray-400 mt-0.5">Usually 1h – 24h</div>
                 </div>
               </div>
 
               {/* Secure & Safe */}
-              <div className="flex flex-col items-start gap-1.5">
-                <div className="w-10 h-10 rounded-full border-2 border-amber-400/60 bg-amber-400/10 flex items-center justify-center">
-                  <ShieldCheck className="w-5 h-5 text-amber-400" />
+              <div className="flex flex-col items-start gap-1 sm:gap-1.5">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-amber-400/60 bg-amber-400/10 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-white">Secure & Safe</div>
-                  <div className="text-[11px] text-gray-400">Your data is protected</div>
+                  <div className="text-[11px] sm:text-xs font-bold text-white leading-tight">Secure & Safe</div>
+                  <div className="text-[9px] sm:text-[11px] text-gray-400 mt-0.5">Data protected</div>
                 </div>
               </div>
 
               {/* 24/7 Support */}
-              <div className="flex flex-col items-start gap-1.5">
-                <div className="w-10 h-10 rounded-full border-2 border-amber-400/60 bg-amber-400/10 flex items-center justify-center">
-                  <Headphones className="w-5 h-5 text-amber-400" />
+              <div className="flex flex-col items-start gap-1 sm:gap-1.5">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-amber-400/60 bg-amber-400/10 flex items-center justify-center shrink-0">
+                  <Headphones className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-white">24/7 Support</div>
-                  <div className="text-[11px] text-gray-400">We are here to help</div>
+                  <div className="text-[11px] sm:text-xs font-bold text-white leading-tight">Live Support</div>
+                  <div className="text-[9px] sm:text-[11px] text-gray-400 mt-0.5">Here to help</div>
                 </div>
               </div>
             </div>
@@ -227,7 +227,7 @@ export default function HomePage() {
 
           {/* RIGHT: Floating Redeem Card — matching image.png */}
           <div className="w-full lg:w-[400px] shrink-0">
-            <div className="bg-[#0d1526]/95 backdrop-blur-md border border-gray-700/80 rounded-2xl shadow-2xl shadow-black/60 p-6 sm:p-7">
+            <div className="bg-[#0d1526]/95 backdrop-blur-md border border-gray-700/80 rounded-2xl shadow-2xl shadow-black/60 p-4 sm:p-7">
 
               {/* Card header */}
               <div className="flex items-center gap-2.5 mb-1">

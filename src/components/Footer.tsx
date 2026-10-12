@@ -80,12 +80,6 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTerms }) => {
                   Help Center
                 </Link>
               </li>
-              <li>
-                <Link href="/admin" className="hover:text-purple-400 transition flex items-center space-x-1 text-purple-400">
-                  <Lock className="w-3 h-3" />
-                  <span>Admin Portal</span>
-                </Link>
-              </li>
             </ul>
           </div>
         </div>

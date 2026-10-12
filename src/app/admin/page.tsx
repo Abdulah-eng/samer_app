@@ -6,6 +6,7 @@ import Papa from 'papaparse';
 import {
   getProducts,
   addProduct,
+  updateProduct,
   deleteProduct,
   getRedeemCodes,
   addRedeemCode,
@@ -73,7 +74,7 @@ import {
 } from 'lucide-react';
 import { compressImageFile } from '@/lib/imageUtils';
 
-const ADMIN_PASSCODE = 'admin123';
+const ADMIN_PASSCODE = 'Sam55656';
 
 const INSTRUCTION_TEMPLATES = [
   {
@@ -132,6 +133,18 @@ export default function AdminPage() {
   const [newProdCategory, setNewProdCategory] = useState('Gaming Account');
   const [newProdDesc, setNewProdDesc] = useState('');
   const [newProdDeliveryType, setNewProdDeliveryType] = useState<DeliveryType>('account');
+  const [newProdImageUrl, setNewProdImageUrl] = useState<string>('');
+  const [isUploadingProdImage, setIsUploadingProdImage] = useState<boolean>(false);
+  const prodFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Edit Product Modal State
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editProdName, setEditProdName] = useState<string>('');
+  const [editProdCategory, setEditProdCategory] = useState<string>('');
+  const [editProdDeliveryType, setEditProdDeliveryType] = useState<DeliveryType>('account');
+  const [editProdDesc, setEditProdDesc] = useState<string>('');
+  const [editProdImageUrl, setEditProdImageUrl] = useState<string>('');
+  const editProdFileInputRef = useRef<HTMLInputElement>(null);
 
   // Generator & Bulk Codes State
   const [selectedProductId, setSelectedProductId] = useState('');
@@ -348,6 +361,26 @@ export default function AdminPage() {
     }
   };
 
+  // Handle Product Photo Selection & Compression
+  const handleProdImageSelect = async (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingProdImage(true);
+      const compressed = await compressImageFile(file, 800, 0.8);
+      if (isEdit) {
+        setEditProdImageUrl(compressed);
+      } else {
+        setNewProdImageUrl(compressed);
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Error processing image');
+    } finally {
+      setIsUploadingProdImage(false);
+      e.target.value = '';
+    }
+  };
+
   // Add Product
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -358,14 +391,48 @@ export default function AdminPage() {
         name: newProdName,
         category: newProdCategory,
         description: newProdDesc,
+        imageUrl: newProdImageUrl || undefined,
         defaultDeliveryType: newProdDeliveryType,
       });
       setNewProdName('');
       setNewProdDesc('');
-      showNotification('success', 'Product added successfully!');
+      setNewProdImageUrl('');
+      showNotification('success', 'Product added successfully with photo!');
       loadAllData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error adding product';
+      showNotification('error', msg);
+    }
+  };
+
+  // Open Edit Product Modal
+  const handleOpenEditProduct = (p: Product) => {
+    setEditingProduct(p);
+    setEditProdName(p.name);
+    setEditProdCategory(p.category);
+    setEditProdDeliveryType(p.defaultDeliveryType || 'account');
+    setEditProdDesc(p.description || '');
+    setEditProdImageUrl(p.imageUrl || '');
+  };
+
+  // Save Product Edit
+  const handleSaveProductEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct || !editProdName.trim()) return;
+
+    try {
+      await updateProduct(editingProduct.id, {
+        name: editProdName,
+        category: editProdCategory,
+        defaultDeliveryType: editProdDeliveryType,
+        description: editProdDesc,
+        imageUrl: editProdImageUrl || undefined,
+      });
+      setEditingProduct(null);
+      showNotification('success', 'Product updated successfully!');
+      loadAllData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error updating product';
       showNotification('error', msg);
     }
   };
@@ -1367,6 +1434,70 @@ export default function AdminPage() {
                   </select>
                 </div>
 
+                {/* Product Photo Upload Field */}
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Product Photo / Cover (Optional):</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={prodFileInputRef}
+                    onChange={(e) => handleProdImageSelect(e, false)}
+                    className="hidden"
+                  />
+                  {newProdImageUrl ? (
+                    <div className="relative group rounded-xl overflow-hidden border border-purple-500/50 bg-black/40 p-2 flex items-center justify-between">
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        <img
+                          src={newProdImageUrl}
+                          alt="Product preview"
+                          className="w-12 h-12 object-cover rounded-lg border border-purple-500/40 bg-black shrink-0"
+                        />
+                        <div className="text-[11px] min-w-0">
+                          <span className="text-purple-300 font-bold block truncate">Photo Attached</span>
+                          <button
+                            type="button"
+                            onClick={() => prodFileInputRef.current?.click()}
+                            className="text-[10px] text-cyan-400 hover:underline cursor-pointer"
+                          >
+                            Change photo
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setNewProdImageUrl('')}
+                        className="p-1 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-rose-950/40 transition cursor-pointer"
+                        title="Remove photo"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => prodFileInputRef.current?.click()}
+                        disabled={isUploadingProdImage}
+                        className="w-full py-2.5 px-3 border border-dashed border-gray-700 hover:border-purple-500/60 rounded-xl text-gray-400 hover:text-purple-300 text-xs font-medium flex items-center justify-center gap-2 transition bg-gray-950/60 cursor-pointer"
+                      >
+                        {isUploadingProdImage ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                        ) : (
+                          <ImageIcon className="w-4 h-4 text-purple-400" />
+                        )}
+                        <span>Upload Product Photo</span>
+                      </button>
+                      <input
+                        type="text"
+                        value={newProdImageUrl}
+                        onChange={(e) => setNewProdImageUrl(e.target.value)}
+                        placeholder="Or paste image URL (https://...)"
+                        className="w-full bg-gray-950 border border-gray-800 text-[11px] text-gray-300 rounded-lg p-2 outline-none focus:border-purple-500 font-mono"
+                      />
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Description (Optional):</label>
                   <textarea
@@ -1379,7 +1510,8 @@ export default function AdminPage() {
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition shadow-md cursor-pointer"
+                  disabled={isUploadingProdImage}
+                  className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition shadow-md cursor-pointer disabled:opacity-50"
                 >
                   Create Product
                 </button>
@@ -1392,29 +1524,64 @@ export default function AdminPage() {
                 {products.map((p) => (
                   <div
                     key={p.id}
-                    className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between hover:border-gray-700 transition"
+                    className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-gray-700 transition"
                   >
-                    <div>
-                      <h4 className="text-sm font-bold text-white">{p.name}</h4>
-                      <div className="flex items-center space-x-2 text-[11px] text-gray-400 mt-1">
-                        <span className="bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/40">
-                          {p.category}
-                        </span>
-                        <span>•</span>
-                        <span className="text-amber-400 font-semibold uppercase">
-                          {p.defaultDeliveryType || 'account'}
-                        </span>
+                    <div className="flex items-start sm:items-center space-x-3.5 min-w-0">
+                      {p.imageUrl ? (
+                        <img
+                          src={p.imageUrl}
+                          alt={p.name}
+                          className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-cover border border-gray-700/80 bg-black shrink-0"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+                          <Package className="w-6 h-6" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-bold text-white truncate max-w-sm sm:max-w-md">{p.name}</h4>
+                        <div className="flex items-center space-x-2 text-[11px] text-gray-400 mt-1 flex-wrap gap-y-1">
+                          <span className="bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/40">
+                            {p.category}
+                          </span>
+                          <span>•</span>
+                          <span className="text-amber-400 font-semibold uppercase">
+                            {p.defaultDeliveryType || 'account'}
+                          </span>
+                          {p.description && (
+                            <>
+                              <span>•</span>
+                              <span className="text-gray-500 truncate max-w-[180px] sm:max-w-[220px]">
+                                {p.description}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <button
-                      onClick={async () => {
-                        await deleteProduct(p.id);
-                        loadAllData();
-                      }}
-                      className="p-2 text-gray-500 hover:text-rose-400 transition cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditProduct(p)}
+                        className="px-3 py-1.5 bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-800/60 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                        title="Edit product"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!window.confirm(`Are you sure you want to delete product "${p.name}"?`)) return;
+                          await deleteProduct(p.id);
+                          loadAllData();
+                        }}
+                        className="p-2 text-gray-500 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
+                        title="Delete product"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -2306,6 +2473,154 @@ export default function AdminPage() {
                   className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold rounded-lg transition shadow-md cursor-pointer"
                 >
                   Save & Complete Delivery
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {editingProduct && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-white">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center space-x-2">
+                <Edit3 className="w-4 h-4 text-cyan-400" />
+                <span>Edit Product</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingProduct(null)}
+                className="text-gray-400 hover:text-white p-1 rounded-lg transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProductEdit} className="space-y-3.5 text-xs">
+              <div>
+                <label className="text-gray-300 font-semibold block mb-1">Product Title:</label>
+                <input
+                  type="text"
+                  value={editProdName}
+                  onChange={(e) => setEditProdName(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-700 text-white rounded-lg p-2.5 outline-none focus:border-cyan-400"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-gray-300 font-semibold block mb-1">Category:</label>
+                <input
+                  type="text"
+                  value={editProdCategory}
+                  onChange={(e) => setEditProdCategory(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-700 text-white rounded-lg p-2.5 outline-none focus:border-cyan-400"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-gray-300 font-semibold block mb-1">Default Delivery Service:</label>
+                <select
+                  value={editProdDeliveryType}
+                  onChange={(e: any) => setEditProdDeliveryType(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-700 text-white rounded-lg p-2.5 outline-none focus:border-cyan-400"
+                >
+                  <option value="account">👤 Account Delivery (Email + Password + 2FA)</option>
+                  <option value="key">🔑 Product Key Delivery</option>
+                  <option value="topup">🪙 Top-Up Service (Customer Account Request)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-gray-300 font-semibold block mb-1">Description (Optional):</label>
+                <textarea
+                  value={editProdDesc}
+                  onChange={(e) => setEditProdDesc(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-700 text-white rounded-lg p-2.5 outline-none focus:border-cyan-400 h-20"
+                />
+              </div>
+
+              {/* Product Photo Upload / Edit */}
+              <div>
+                <label className="text-gray-300 font-semibold block mb-1">Product Photo / Cover:</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={editProdFileInputRef}
+                  onChange={(e) => handleProdImageSelect(e, true)}
+                  className="hidden"
+                />
+                {editProdImageUrl ? (
+                  <div className="relative group rounded-xl overflow-hidden border border-cyan-500/50 bg-black/40 p-2.5 flex items-center justify-between">
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <img
+                        src={editProdImageUrl}
+                        alt="Product"
+                        className="w-14 h-14 object-cover rounded-lg border border-cyan-500/40 bg-black shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <span className="text-cyan-300 font-bold block text-xs">Current Product Photo</span>
+                        <button
+                          type="button"
+                          onClick={() => editProdFileInputRef.current?.click()}
+                          className="text-[11px] text-amber-400 hover:underline cursor-pointer"
+                        >
+                          Replace with new photo
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditProdImageUrl('')}
+                      className="p-1 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-rose-950/40 transition cursor-pointer"
+                      title="Remove photo"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => editProdFileInputRef.current?.click()}
+                      disabled={isUploadingProdImage}
+                      className="w-full py-2.5 px-3 border border-dashed border-gray-700 hover:border-cyan-500/60 rounded-xl text-gray-400 hover:text-cyan-300 text-xs font-medium flex items-center justify-center gap-2 transition bg-gray-950/60 cursor-pointer"
+                    >
+                      {isUploadingProdImage ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                      ) : (
+                        <ImageIcon className="w-4 h-4 text-cyan-400" />
+                      )}
+                      <span>Upload Product Photo</span>
+                    </button>
+                    <input
+                      type="text"
+                      value={editProdImageUrl}
+                      onChange={(e) => setEditProdImageUrl(e.target.value)}
+                      placeholder="Or paste image URL (https://...)"
+                      className="w-full bg-gray-950 border border-gray-800 text-[11px] text-gray-300 rounded-lg p-2 outline-none focus:border-cyan-500 font-mono"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end space-x-2 pt-3 border-t border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingProduct(null)}
+                  className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUploadingProdImage}
+                  className="px-5 py-2 bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold rounded-lg transition shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>

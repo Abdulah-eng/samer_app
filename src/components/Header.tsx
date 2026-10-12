@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Globe, ShieldCheck, ChevronDown, Check } from 'lucide-react';
+import { Globe, ChevronDown, Check } from 'lucide-react';
 import { StoreSettings } from '@/lib/types';
 
 interface HeaderProps {
@@ -175,15 +175,6 @@ export const Header: React.FC<HeaderProps> = ({ settings }) => {
               </div>
             )}
           </div>
-
-          {/* Admin link */}
-          <Link
-            href="/admin"
-            className="hidden sm:flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-full border border-purple-500/30 bg-purple-950/40 text-purple-300 hover:text-purple-200 transition"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
-            <span>Admin</span>
-          </Link>
         </div>
       </div>
     </header>

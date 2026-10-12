@@ -7,6 +7,7 @@ export interface Product {
   name: string;
   category: string;
   description?: string;
+  imageUrl?: string;
   defaultDeliveryType?: DeliveryType;
   createdAt: string;
 }

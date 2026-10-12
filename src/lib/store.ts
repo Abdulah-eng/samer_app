@@ -102,20 +102,36 @@ function setLocal<T>(key: string, value: T): void {
 
 // ---------------- PRODUCTS SERVICE ----------------
 export async function getProducts(): Promise<Product[]> {
+  const mapProduct = (item: any): Product => {
+    let description = item.description || '';
+    let imageUrl = item.image_url || item.imageUrl || undefined;
+    if (!imageUrl && description.includes('[IMAGE:')) {
+      const match = description.match(/\[IMAGE:([\s\S]*?)\]/);
+      if (match) {
+        imageUrl = match[1];
+        description = description.replace(match[0], '').trim();
+      }
+    }
+    return {
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      description,
+      imageUrl,
+      defaultDeliveryType: item.default_delivery_type || item.defaultDeliveryType || 'account',
+      createdAt: item.created_at || item.createdAt || new Date().toISOString(),
+    };
+  };
+
   if (isSupabaseConfigured && supabase) {
-    const { data, error } = await supabase.from('products').select('*');
+    const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
     if (!error && data) {
-      return data.map((item) => ({
-        id: item.id,
-        name: item.name,
-        category: item.category,
-        description: item.description,
-        defaultDeliveryType: item.default_delivery_type || 'account',
-        createdAt: item.created_at,
-      }));
+      return data.map(mapProduct);
     }
   }
-  return getLocal<Product[]>(STORAGE_KEYS.PRODUCTS, INITIAL_PRODUCTS);
+
+  const local = getLocal<Product[]>(STORAGE_KEYS.PRODUCTS, INITIAL_PRODUCTS);
+  return local.map(mapProduct);
 }
 
 export async function addProduct(product: Omit<Product, 'id' | 'createdAt'>): Promise<Product> {
@@ -125,13 +141,17 @@ export async function addProduct(product: Omit<Product, 'id' | 'createdAt'>): Pr
     createdAt: new Date().toISOString(),
   };
 
+  const descToStore = product.imageUrl
+    ? `[IMAGE:${product.imageUrl}]\n${product.description || ''}`.trim()
+    : product.description;
+
   if (isSupabaseConfigured && supabase) {
     const { data, error } = await supabase
       .from('products')
       .insert({
         name: product.name,
         category: product.category,
-        description: product.description,
+        description: descToStore,
         default_delivery_type: product.defaultDeliveryType || 'account',
       })
       .select()
@@ -147,7 +167,8 @@ export async function addProduct(product: Omit<Product, 'id' | 'createdAt'>): Pr
         id: data.id,
         name: data.name,
         category: data.category,
-        description: data.description,
+        description: product.description,
+        imageUrl: product.imageUrl,
         defaultDeliveryType: data.default_delivery_type || 'account',
         createdAt: data.created_at,
       };
@@ -158,6 +179,48 @@ export async function addProduct(product: Omit<Product, 'id' | 'createdAt'>): Pr
   const updated = [newProduct, ...products];
   setLocal(STORAGE_KEYS.PRODUCTS, updated);
   return newProduct;
+}
+
+export async function updateProduct(
+  id: string,
+  updatedData: Partial<Omit<Product, 'id' | 'createdAt'>>
+): Promise<Product> {
+  const products = await getProducts();
+  const existingIndex = products.findIndex((p) => p.id === id);
+  if (existingIndex === -1) {
+    throw new Error('Product not found');
+  }
+
+  const existing = products[existingIndex];
+  const updatedProduct: Product = {
+    ...existing,
+    ...updatedData,
+  };
+
+  const descToStore = updatedProduct.imageUrl
+    ? `[IMAGE:${updatedProduct.imageUrl}]\n${updatedProduct.description || ''}`.trim()
+    : updatedProduct.description;
+
+  if (isSupabaseConfigured && supabase) {
+    const { error } = await supabase
+      .from('products')
+      .update({
+        name: updatedProduct.name,
+        category: updatedProduct.category,
+        description: descToStore,
+        default_delivery_type: updatedProduct.defaultDeliveryType || 'account',
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Supabase updateProduct error:', error);
+      throw new Error(`Database error updating product: ${error.message}.`);
+    }
+  }
+
+  products[existingIndex] = updatedProduct;
+  setLocal(STORAGE_KEYS.PRODUCTS, products);
+  return updatedProduct;
 }
 
 export async function deleteProduct(id: string): Promise<boolean> {

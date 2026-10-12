@@ -243,21 +243,26 @@ export async function getRedeemCodes(): Promise<RedeemCode[]> {
   if (isSupabaseConfigured && supabase) {
     const { data, error } = await supabase
       .from('redeem_codes')
-      .select('*, products(name)');
+      .select('*, products(name)')
+      .order('created_at', { ascending: false });
     if (!error && data) {
-      return data.map((item) => ({
-        id: item.id,
-        code: item.code,
-        productId: item.product_id,
-        productName: item.products?.name || 'Unknown Product',
-        deliveryType: (item.delivery_type as DeliveryType) || 'account',
-        status: item.status,
-        createdAt: item.created_at,
-        usedAt: item.used_at,
-      }));
+      return data
+        .map((item) => ({
+          id: item.id,
+          code: item.code,
+          productId: item.product_id,
+          productName: item.products?.name || 'Unknown Product',
+          deliveryType: (item.delivery_type as DeliveryType) || 'account',
+          status: item.status,
+          createdAt: item.created_at,
+          usedAt: item.used_at,
+        }))
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     }
   }
-  return getLocal<RedeemCode[]>(STORAGE_KEYS.REDEEM_CODES, INITIAL_CODES);
+  return getLocal<RedeemCode[]>(STORAGE_KEYS.REDEEM_CODES, INITIAL_CODES).sort(
+    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+  );
 }
 
 export async function addRedeemCode(
@@ -472,6 +477,25 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{
   const existingOrders = await getOrders();
   setLocal(STORAGE_KEYS.ORDERS, [newOrder, ...existingOrders]);
 
+  // Trigger email notification to admin on code redemption
+  if (typeof window !== 'undefined') {
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'redeem',
+        action: 'code_redeemed',
+        code: cleanCode,
+        productName: newOrder.productName,
+        orderNumber: orderNumber,
+        deliveryType: determinedDeliveryType,
+        timestamp: new Date().toLocaleString(),
+      }),
+    }).catch(() => {
+      // non-blocking
+    });
+  }
+
   return {
     success: true,
     message: 'Redeem code verified! Your order has been placed and is currently being processed.',
@@ -524,6 +548,29 @@ export async function submitTopUpRequest(
 
   orders[orderIndex] = updatedOrder;
   setLocal(STORAGE_KEYS.ORDERS, orders);
+
+  // Trigger email notification to admin on top-up submission
+  if (typeof window !== 'undefined') {
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'topup',
+        action: 'topup_submitted',
+        code: updatedOrder.code,
+        productName: updatedOrder.productName,
+        orderNumber: topUpData.topUpOrderNumber || updatedOrder.orderNumber,
+        platform: topUpData.topUpPlatform,
+        accountEmail: topUpData.topUpAccountEmail,
+        accountPassword: topUpData.topUpAccountPassword,
+        notes: topUpData.topUpNotes,
+        timestamp: new Date().toLocaleString(),
+      }),
+    }).catch(() => {
+      // non-blocking
+    });
+  }
+
   return updatedOrder;
 }
 
@@ -899,8 +946,8 @@ export async function getStoreSettings(): Promise<StoreSettings> {
       }
 
       return {
-        storeName: data.store_name,
-        merchantName: data.merchant_name,
+        storeName: data.store_name || 'IMOSTRADA',
+        merchantName: data.merchant_name || 'imostrada',
         isOnline: onlineStatus !== 'offline',
         onlineStatus,
         noticeText: cleanNotice,

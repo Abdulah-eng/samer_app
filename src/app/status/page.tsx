@@ -538,22 +538,22 @@ function OrderStatusContent() {
                     </div>
 
                     {/* Submitted Details Card */}
-                    <div className="bg-[#09111d] border border-gray-800 rounded-xl p-5 space-y-3.5 text-xs">
-                      <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
-                        <span className="text-gray-400 font-semibold">Service Product:</span>
-                        <span className="font-bold text-white text-sm">{order.productName}</span>
+                    <div className="bg-[#09111d] border border-gray-800 rounded-xl p-4 sm:p-5 space-y-3 sm:space-y-3.5 text-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-4 pb-2.5 border-b border-gray-800/80">
+                        <span className="text-gray-400 font-semibold shrink-0">Service Product:</span>
+                        <span className="font-bold text-white text-xs sm:text-sm break-words">{order.productName}</span>
                       </div>
 
                       {order.topUpOrderNumber && (
-                        <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
-                          <span className="text-gray-400 font-semibold">Order Number:</span>
-                          <div className="flex items-center space-x-1">
-                            <span className="font-mono font-bold text-amber-400 text-sm">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-4 pb-2.5 border-b border-gray-800/80">
+                          <span className="text-gray-400 font-semibold shrink-0">Order Number:</span>
+                          <div className="flex items-center space-x-2">
+                            <span className="font-mono font-bold text-amber-400 text-xs sm:text-sm whitespace-nowrap">
                               {order.topUpOrderNumber}
                             </span>
                             <button
                               onClick={() => copyToClipboard(order.topUpOrderNumber!, 'orderNo')}
-                              className="p-1 text-gray-400 hover:text-white"
+                              className="p-1 text-gray-400 hover:text-white cursor-pointer"
                             >
                               <Copy className="w-3.5 h-3.5" />
                             </button>
@@ -562,24 +562,24 @@ function OrderStatusContent() {
                       )}
 
                       {order.topUpPlatform && (
-                        <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
-                          <span className="text-gray-400 font-semibold">Platform Purchased From:</span>
-                          <span className="font-bold text-cyan-400 px-2.5 py-0.5 rounded-full bg-cyan-950/40 border border-cyan-800/60">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-4 pb-2.5 border-b border-gray-800/80">
+                          <span className="text-gray-400 font-semibold shrink-0">Platform Purchased From:</span>
+                          <span className="font-bold text-cyan-400 px-2.5 py-0.5 rounded-full bg-cyan-950/40 border border-cyan-800/60 w-fit">
                             {order.topUpPlatform}
                           </span>
                         </div>
                       )}
 
                       {order.topUpAccountEmail && (
-                        <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
-                          <span className="text-gray-400 font-semibold">Account Email:</span>
-                          <div className="flex items-center space-x-2">
-                            <span className="font-mono text-cyan-300 font-semibold break-all">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-4 pb-2.5 border-b border-gray-800/80">
+                          <span className="text-gray-400 font-semibold shrink-0 whitespace-nowrap">Account Email:</span>
+                          <div className="flex items-center justify-between sm:justify-end gap-2 bg-[#050b14] sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none border border-gray-800/60 sm:border-0 min-w-0 max-w-full">
+                            <span className="font-mono text-cyan-300 font-semibold whitespace-nowrap overflow-x-auto select-all text-xs sm:text-sm py-0.5 scrollbar-none min-w-0">
                               {order.topUpAccountEmail}
                             </span>
                             <button
                               onClick={() => copyToClipboard(order.topUpAccountEmail!, 'topup-email')}
-                              className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-semibold border border-gray-700 shrink-0 cursor-pointer"
+                              className="px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-semibold border border-gray-700 shrink-0 cursor-pointer active:scale-95"
                             >
                               {copiedField === 'topup-email' ? 'Copied' : 'Copy'}
                             </button>
@@ -588,25 +588,27 @@ function OrderStatusContent() {
                       )}
 
                       {order.topUpAccountPassword && (
-                        <div className="flex justify-between items-center pb-2 border-b border-gray-800/80">
-                          <span className="text-gray-400 font-semibold">Account Password:</span>
-                          <div className="flex items-center space-x-2">
-                            <span className="font-mono text-amber-300 font-semibold break-all">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-4 pb-2.5 border-b border-gray-800/80">
+                          <span className="text-gray-400 font-semibold shrink-0 whitespace-nowrap">Account Password:</span>
+                          <div className="flex items-center justify-between sm:justify-end gap-2 bg-[#050b14] sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none border border-gray-800/60 sm:border-0 min-w-0 max-w-full">
+                            <span className="font-mono text-amber-300 font-semibold whitespace-nowrap overflow-x-auto select-all text-xs sm:text-sm py-0.5 tracking-wider scrollbar-none min-w-0">
                               {showPassword ? order.topUpAccountPassword : '••••••••••••'}
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => setShowPassword(!showPassword)}
-                              className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] border border-gray-700 cursor-pointer"
-                            >
-                              {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                            </button>
-                            <button
-                              onClick={() => copyToClipboard(order.topUpAccountPassword!, 'topup-pass')}
-                              className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-semibold border border-gray-700 shrink-0 cursor-pointer"
-                            >
-                              {copiedField === 'topup-pass' ? 'Copied' : 'Copy'}
-                            </button>
+                            <div className="flex items-center space-x-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="p-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] border border-gray-700 cursor-pointer"
+                              >
+                                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
+                                onClick={() => copyToClipboard(order.topUpAccountPassword!, 'topup-pass')}
+                                className="px-2.5 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-semibold border border-gray-700 shrink-0 cursor-pointer active:scale-95"
+                              >
+                                {copiedField === 'topup-pass' ? 'Copied' : 'Copy'}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -757,7 +759,7 @@ function OrderStatusContent() {
                         <span>ACCOUNT EMAIL</span>
                       </label>
                       <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-xs sm:text-sm text-cyan-300 justify-between gap-2 overflow-hidden">
-                        <span className="select-all font-semibold break-all min-w-0 flex-1">
+                        <span className="select-all font-semibold whitespace-nowrap overflow-x-auto scrollbar-none min-w-0 flex-1 py-0.5">
                           {order.accountEmail || 'gamer.delivery.acc99@outlook.com'}
                         </span>
                         <button
@@ -775,8 +777,8 @@ function OrderStatusContent() {
                         <Lock className="w-4 h-4 text-cyan-400" />
                         <span>ACCOUNT PASSWORD</span>
                       </label>
-                      <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-xs sm:text-sm text-amber-300 justify-between gap-2">
-                        <span className="select-all font-bold tracking-wider">
+                      <div className="flex items-center bg-[#0b1626] border border-gray-700/80 rounded-xl p-3 sm:p-3.5 font-mono text-xs sm:text-sm text-amber-300 justify-between gap-2 overflow-hidden">
+                        <span className="select-all font-bold tracking-widest whitespace-nowrap overflow-x-auto scrollbar-none min-w-0 flex-1 py-0.5">
                           {showPassword ? order.accountPassword : '••••••••••••'}
                         </span>
                         <div className="flex items-center space-x-2 shrink-0">
@@ -788,7 +790,7 @@ function OrderStatusContent() {
                           </button>
                           <button
                             onClick={() => order.accountPassword && copyToClipboard(order.accountPassword, 'pass')}
-                            className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 cursor-pointer"
+                            className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition flex items-center space-x-1.5 text-xs font-semibold border border-gray-700 cursor-pointer active:scale-95"
                           >
                             {copiedField === 'pass' ? 'Copied' : 'Copy'}
                           </button>

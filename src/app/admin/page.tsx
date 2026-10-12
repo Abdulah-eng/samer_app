@@ -71,6 +71,8 @@ import {
   Download,
   X,
   Loader2,
+  Zap,
+  Mail,
 } from 'lucide-react';
 import { compressImageFile } from '@/lib/imageUtils';
 
@@ -158,6 +160,13 @@ export default function AdminPage() {
   const [orderTypeFilter, setOrderTypeFilter] = useState<'all' | 'account' | 'key' | 'topup'>('all');
   const [codeFilter, setCodeFilter] = useState<'all' | 'unused' | 'processing' | 'completed'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Newest codes & Search states
+  const [newestOnly, setNewestOnly] = useState(false);
+  const [productSearchInGenerator, setProductSearchInGenerator] = useState('');
+  const [productCatalogSearch, setProductCatalogSearch] = useState('');
+  const [testingNotification, setTestingNotification] = useState(false);
+  const [notificationTestStatus, setNotificationTestStatus] = useState<string | null>(null);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
@@ -303,6 +312,40 @@ export default function AdminPage() {
     navigator.clipboard.writeText(text);
     setCopiedModalField(fieldName);
     setTimeout(() => setCopiedModalField(null), 2000);
+  };
+
+  const handleTestNotification = async () => {
+    setTestingNotification(true);
+    setNotificationTestStatus(null);
+    try {
+      const res = await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'test',
+          type: 'test',
+          timestamp: new Date().toLocaleString(),
+        }),
+      });
+      const data = await res.json();
+      if (data.formSubmitResponse?.message?.includes('Activation')) {
+        setNotificationTestStatus(
+          "⚠️ FormSubmit needs 1-time activation: Please check samermastouri21@gmail.com (and Spam folder) for the email from FormSubmit and click 'Activate Form' once."
+        );
+        showNotification('success', 'Activation email sent to samermastouri21@gmail.com!');
+      } else if (data.success) {
+        setNotificationTestStatus('✅ Test email delivered to samermastouri21@gmail.com!');
+        showNotification('success', 'Test email sent successfully!');
+      } else {
+        setNotificationTestStatus(`❌ Error sending test email: ${data.error || 'Unknown error'}`);
+        showNotification('error', 'Failed to send test notification');
+      }
+    } catch (err: any) {
+      setNotificationTestStatus(`❌ Network error: ${err.message}`);
+      showNotification('error', 'Network error');
+    } finally {
+      setTestingNotification(false);
+    }
   };
 
   // Fulfill Order Action
@@ -691,13 +734,39 @@ export default function AdminPage() {
     return true;
   });
 
-  const filteredCodes = codes.filter((c) => {
+  let filteredCodes = codes.filter((c) => {
     if (codeFilter !== 'all' && c.status !== codeFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return c.code.toLowerCase().includes(q) || (c.productName && c.productName.toLowerCase().includes(q));
     }
     return true;
+  });
+
+  // Always sort newest first
+  filteredCodes = [...filteredCodes].sort(
+    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+  );
+
+  if (newestOnly) {
+    filteredCodes = filteredCodes.slice(0, 20);
+  }
+
+  const filteredProductsForGenerator = products.filter((p) => {
+    if (!productSearchInGenerator) return true;
+    const q = productSearchInGenerator.toLowerCase();
+    return p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q);
+  });
+
+  const filteredCatalogProducts = products.filter((p) => {
+    if (!productCatalogSearch) return true;
+    const q = productCatalogSearch.toLowerCase();
+    return (
+      p.name.toLowerCase().includes(q) ||
+      p.category.toLowerCase().includes(q) ||
+      (p.description && p.description.toLowerCase().includes(q)) ||
+      (p.defaultDeliveryType && p.defaultDeliveryType.toLowerCase().includes(q))
+    );
   });
 
   const processingCount = orders.filter((o) => o.status === 'processing').length;
@@ -1162,18 +1231,59 @@ export default function AdminPage() {
 
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs text-gray-400 block mb-1">Target Product:</label>
-                    <select
-                      value={selectedProductId}
-                      onChange={(e) => setSelectedProductId(e.target.value)}
-                      className="w-full bg-gray-950 border border-gray-700 text-xs text-gray-200 rounded-lg p-2.5 outline-none"
-                    >
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-gray-400">Target Product:</label>
+                      {productSearchInGenerator && (
+                        <span className="text-[10px] text-cyan-400 font-semibold">
+                          {filteredProductsForGenerator.length} of {products.length} found
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="🔍 Search / filter product name..."
+                          value={productSearchInGenerator}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setProductSearchInGenerator(val);
+                            const matched = products.filter((p) =>
+                              p.name.toLowerCase().includes(val.toLowerCase())
+                            );
+                            if (matched.length > 0 && !matched.some((p) => p.id === selectedProductId)) {
+                              setSelectedProductId(matched[0].id);
+                            }
+                          }}
+                          className="w-full bg-gray-950 border border-gray-800 focus:border-cyan-500/70 text-xs text-white rounded-lg px-2.5 py-1.5 outline-none placeholder:text-gray-600 transition"
+                        />
+                        {productSearchInGenerator && (
+                          <button
+                            type="button"
+                            onClick={() => setProductSearchInGenerator('')}
+                            className="absolute right-2 top-2 text-gray-500 hover:text-white text-xs cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                      <select
+                        value={selectedProductId}
+                        onChange={(e) => setSelectedProductId(e.target.value)}
+                        className="w-full bg-gray-950 border border-gray-700 text-xs text-gray-200 rounded-lg p-2.5 outline-none"
+                      >
+                        {filteredProductsForGenerator.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                        {filteredProductsForGenerator.length === 0 && (
+                          <option disabled value="">
+                            No products match "{productSearchInGenerator}"
+                          </option>
+                        )}
+                      </select>
+                    </div>
                   </div>
 
                   {/* Delivery Type Option */}
@@ -1312,16 +1422,37 @@ export default function AdminPage() {
 
             {/* Redeem Codes List */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-xl">
-              <div className="p-4 bg-gray-950 border-b border-gray-800 flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">
-                  Existing Redeem Codes Database ({filteredCodes.length})
-                </span>
+              <div className="p-4 bg-gray-950 border-b border-gray-800 flex flex-wrap gap-3 justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+                    Existing Redeem Codes Database ({filteredCodes.length})
+                  </span>
+                  {newestOnly && (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold">
+                      ⚡ Top 20 Newest
+                    </span>
+                  )}
+                </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center flex-wrap gap-2">
+                  {/* Quick "Newest Codes" Filter Button */}
+                  <button
+                    type="button"
+                    onClick={() => setNewestOnly(!newestOnly)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                      newestOnly
+                        ? 'bg-amber-400 text-gray-950 border-amber-300 shadow-lg shadow-amber-500/20'
+                        : 'bg-gray-900 hover:bg-gray-800 text-amber-300 border-amber-500/40'
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>{newestOnly ? '✓ Newest Codes Active' : '⚡ Newest Codes'}</span>
+                  </button>
+
                   <select
                     value={codeFilter}
                     onChange={(e: any) => setCodeFilter(e.target.value)}
-                    className="bg-gray-900 border border-gray-700 text-xs text-gray-300 rounded-lg p-1.5 outline-none"
+                    className="bg-gray-900 border border-gray-700 text-xs text-gray-300 rounded-lg p-1.5 outline-none cursor-pointer"
                   >
                     <option value="all">All Statuses</option>
                     <option value="unused">Unused Only</option>
@@ -1519,9 +1650,51 @@ export default function AdminPage() {
             </div>
 
             <div className="md:col-span-2 space-y-4">
-              <h3 className="text-sm font-bold text-gray-300">Catalog Products ({products.length})</h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-gray-300">Catalog Products ({filteredCatalogProducts.length})</h3>
+                  {productCatalogSearch && (
+                    <span className="text-[11px] text-purple-400 font-semibold bg-purple-950/40 border border-purple-800/60 px-2 py-0.5 rounded-full">
+                      Filter active
+                    </span>
+                  )}
+                </div>
+
+                {/* Product search input */}
+                <div className="relative w-full sm:w-72">
+                  <input
+                    type="text"
+                    placeholder="🔍 Search products by name..."
+                    value={productCatalogSearch}
+                    onChange={(e) => setProductCatalogSearch(e.target.value)}
+                    className="w-full bg-gray-950 border border-gray-800 focus:border-purple-500 text-xs text-white rounded-lg pl-3 pr-8 py-2 outline-none transition placeholder:text-gray-600"
+                  />
+                  {productCatalogSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setProductCatalogSearch('')}
+                      className="absolute right-2.5 top-2 text-gray-500 hover:text-white text-xs cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {filteredCatalogProducts.length === 0 && (
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center space-y-2">
+                  <p className="text-sm text-gray-400">No products found matching "{productCatalogSearch}"</p>
+                  <button
+                    onClick={() => setProductCatalogSearch('')}
+                    className="text-xs text-purple-400 hover:underline cursor-pointer"
+                  >
+                    Clear Search Filter
+                  </button>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 gap-3">
-                {products.map((p) => (
+                {filteredCatalogProducts.map((p) => (
                   <div
                     key={p.id}
                     className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-gray-700 transition"
@@ -2179,6 +2352,45 @@ export default function AdminPage() {
                 Save Settings
               </button>
             </form>
+
+            {/* Notification System Panel */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4 shadow-xl">
+              <div className="flex items-center space-x-2 border-b border-gray-800 pb-3">
+                <Mail className="w-5 h-5 text-cyan-400" />
+                <h3 className="text-base font-bold text-white">Email Notification System</h3>
+              </div>
+
+              <div className="text-xs text-gray-300 space-y-2 leading-relaxed">
+                <p>
+                  Alerts are dispatched to: <strong className="text-cyan-300 font-mono">samermastouri21@gmail.com</strong>
+                </p>
+                <ul className="list-disc pl-5 space-y-1 text-gray-400">
+                  <li>🎁 Whenever a customer redeems a code</li>
+                  <li>⚡ Whenever a customer submits their Top-Up credentials (Order #, Email, Password, Platform)</li>
+                  <li>💬 Whenever a customer sends a message or attaches an image in Live Chat</li>
+                </ul>
+              </div>
+
+              {notificationTestStatus && (
+                <div className="p-3 rounded-lg bg-gray-950 border border-gray-800 text-xs font-medium">
+                  {notificationTestStatus}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleTestNotification}
+                disabled={testingNotification}
+                className="py-2.5 px-4 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-gray-950 font-bold rounded-lg text-xs transition flex items-center space-x-2 cursor-pointer"
+              >
+                {testingNotification ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+                <span>{testingNotification ? 'Sending Test Email...' : '🧪 Send Test Notification to My Email'}</span>
+              </button>
+            </div>
           </div>
         )}
       </main>
@@ -2311,12 +2523,14 @@ export default function AdminPage() {
                   {editingOrder.topUpAccountEmail ? (
                     <div>
                       <span className="text-gray-400 block text-[11px]">Customer Account Email:</span>
-                      <div className="flex items-center justify-between bg-gray-950 p-2 rounded border border-gray-800 mt-1">
-                        <span className="font-mono text-cyan-300">{editingOrder.topUpAccountEmail}</span>
+                      <div className="flex items-center justify-between bg-gray-950 p-2 rounded border border-gray-800 mt-1 min-w-0">
+                        <span className="font-mono text-cyan-300 whitespace-nowrap overflow-x-auto select-all min-w-0 mr-2 scrollbar-none">
+                          {editingOrder.topUpAccountEmail}
+                        </span>
                         <button
                           type="button"
                           onClick={() => copyToClipboard(editingOrder.topUpAccountEmail!, 'topUpEmail')}
-                          className="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-[10px] font-bold"
+                          className="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 text-[10px] font-bold shrink-0"
                         >
                           {copiedModalField === 'topUpEmail' ? 'Copied' : 'Copy'}
                         </button>
@@ -2331,11 +2545,11 @@ export default function AdminPage() {
                   {editingOrder.topUpAccountPassword && (
                     <div>
                       <span className="text-gray-400 block text-[11px]">Customer Account Password:</span>
-                      <div className="flex items-center justify-between bg-gray-950 p-2 rounded border border-gray-800 mt-1">
-                        <span className="font-mono text-amber-300">
+                      <div className="flex items-center justify-between bg-gray-950 p-2 rounded border border-gray-800 mt-1 min-w-0">
+                        <span className="font-mono text-amber-300 whitespace-nowrap overflow-x-auto select-all min-w-0 mr-2 tracking-wider scrollbar-none">
                           {showFulfillPass ? editingOrder.topUpAccountPassword : '••••••••••••'}
                         </span>
-                        <div className="flex items-center space-x-1">
+                        <div className="flex items-center space-x-1 shrink-0">
                           <button
                             type="button"
                             onClick={() => setShowFulfillPass(!showFulfillPass)}

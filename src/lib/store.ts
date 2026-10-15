@@ -393,13 +393,18 @@ export async function deleteRedeemCode(id: string): Promise<boolean> {
 }
 
 // ---------------- ORDERS & REDEMPTION WORKFLOW ----------------
-export async function verifyAndRedeemCode(rawCode: string): Promise<{
+export async function verifyAndRedeemCode(
+  rawCode: string,
+  customerEmail?: string
+): Promise<{
   success: boolean;
   message: string;
   isTopUp?: boolean;
   order?: Order;
 }> {
   const cleanCode = rawCode.trim().toUpperCase();
+  const cleanCustomerEmail = customerEmail?.trim() || undefined;
+
   if (!cleanCode) {
     return { success: false, message: 'Please enter a valid redeem code.' };
   }
@@ -475,6 +480,8 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{
     productImageUrl: prodImg,
     status: 'processing',
     deliveryType: determinedDeliveryType,
+    customerEmail: cleanCustomerEmail,
+    topUpAccountEmail: cleanCustomerEmail,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -485,14 +492,30 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{
 
   if (isSupabaseConfigured && supabase) {
     await supabase.from('redeem_codes').update({ status: 'processing', used_at: foundCode.usedAt }).eq('code', cleanCode);
-    await supabase.from('orders').insert({
+    
+    // Store in Supabase (using top_up_account_email as universal fallback for customer email)
+    const basePayload: any = {
       order_number: orderNumber,
       code: cleanCode,
       product_id: foundCode.productId,
       product_name: newOrder.productName,
       status: 'processing',
       delivery_type: determinedDeliveryType,
-    });
+      top_up_account_email: cleanCustomerEmail || null,
+    };
+
+    try {
+      const { error } = await supabase.from('orders').insert({
+        ...basePayload,
+        customer_email: cleanCustomerEmail || null,
+      });
+      if (error) {
+        // Fallback without customer_email column if not present in schema
+        await supabase.from('orders').insert(basePayload);
+      }
+    } catch {
+      await supabase.from('orders').insert(basePayload);
+    }
   }
 
   const updatedCodes = codes.map((c) => (c.code.toUpperCase() === cleanCode ? foundCode : c));
@@ -513,6 +536,7 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{
         productName: newOrder.productName,
         orderNumber: orderNumber,
         deliveryType: determinedDeliveryType,
+        customerEmail: cleanCustomerEmail,
         timestamp: new Date().toLocaleString(),
       }),
     }).catch(() => {
@@ -634,6 +658,7 @@ export async function getOrders(): Promise<Order[]> {
           accountPassword: item.account_password,
           twoFactorKey: item.two_factor_key,
           productKey: item.product_key,
+          customerEmail: item.customer_email || item.top_up_account_email || undefined,
           topUpOrderNumber: item.top_up_order_number,
           topUpPlatform: item.top_up_platform,
           topUpAccountEmail: item.top_up_account_email,
@@ -659,12 +684,15 @@ export async function getOrders(): Promise<Order[]> {
       pLower.includes('top-up') ||
       pLower.includes('v-bucks') ||
       pLower.includes('coins') ||
-      o.topUpAccountEmail ||
       o.topUpOrderNumber
     ) {
       dType = 'topup';
     }
-    return { ...o, deliveryType: dType };
+    return {
+      ...o,
+      deliveryType: dType,
+      customerEmail: o.customerEmail || o.topUpAccountEmail || undefined,
+    };
   });
 }
 
@@ -693,10 +721,145 @@ export async function getOrderDetails(codeOrOrderNumber: string): Promise<Order 
   return match;
 }
 
+// Update or set customer notification email for an existing order (Accounts & Keys)
+export async function updateOrderNotificationEmail(orderIdOrCode: string, email: string): Promise<Order> {
+  const cleanEmail = email.trim();
+  const orders = await getOrders();
+  const orderIndex = orders.findIndex(
+    (o) =>
+      o.id === orderIdOrCode ||
+      o.code.toUpperCase() === orderIdOrCode.toUpperCase() ||
+      o.orderNumber.toUpperCase() === orderIdOrCode.toUpperCase()
+  );
+
+  if (orderIndex === -1) {
+    throw new Error('Order not found');
+  }
+
+  const existing = orders[orderIndex];
+  const updatedOrder: Order = {
+    ...existing,
+    customerEmail: cleanEmail,
+    topUpAccountEmail: cleanEmail,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase
+        .from('orders')
+        .update({
+          top_up_account_email: cleanEmail,
+          updated_at: updatedOrder.updatedAt,
+        })
+        .eq('id', existing.id);
+    } catch (e) {
+      console.warn('Supabase updateOrderNotificationEmail warning', e);
+    }
+  }
+
+  orders[orderIndex] = updatedOrder;
+  setLocal(STORAGE_KEYS.ORDERS, orders);
+  return updatedOrder;
+}
+
+// Dispatch order ready email notification (Accounts and Keys ONLY)
+export async function triggerOrderReadyNotification(order: Order) {
+  if (typeof window === 'undefined') return;
+  const targetEmail = order.customerEmail || order.topUpAccountEmail;
+  const randTag = Math.floor(1000 + Math.random() * 9000);
+
+  // 1. Primary Route: /api/notify server endpoint
+  try {
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'order_ready',
+        action: 'order_ready',
+        orderNumber: order.orderNumber,
+        code: order.code,
+        productName: order.productName,
+        deliveryType: order.deliveryType || 'account',
+        customerEmail: targetEmail,
+        accountEmail: order.accountEmail,
+        accountPassword: order.accountPassword,
+        twoFactorKey: order.twoFactorKey,
+        productKey: order.productKey,
+        instructions: order.instructions,
+        timestamp: new Date().toLocaleString(),
+      }),
+    }).catch(() => {});
+  } catch {
+    // non-blocking
+  }
+
+  // 2. Direct client-side FormSubmit notification
+  const isAccount = (order.deliveryType || 'account') === 'account';
+  const isKey = order.deliveryType === 'key';
+  const clientPayload: Record<string, string> = {
+    _subject: `🎉 [ORDER READY #${randTag}] Your ${order.productName || 'Product'} is Ready! (Order #${order.orderNumber})`,
+    _template: 'box',
+    _captcha: 'false',
+    'Event': '🎉 Order Ready & Delivered',
+    'Product': order.productName || 'Digital Product',
+    'Order Number': order.orderNumber,
+    'Redeem Code': order.code,
+    'Delivery Type': (order.deliveryType || 'account').toUpperCase(),
+    'Customer Notification Email': targetEmail || 'None provided',
+    ...(isAccount
+      ? {
+          'Delivered Account Email': order.accountEmail || 'N/A',
+          'Delivered Account Password': order.accountPassword || 'N/A',
+          'Two-Factor / Security Key': order.twoFactorKey || 'None',
+        }
+      : {}),
+    ...(isKey
+      ? {
+          'Delivered Product Key': order.productKey || 'N/A',
+        }
+      : {}),
+    'Setup Instructions': order.instructions || 'Check order status page for complete instructions.',
+    'Order Status Page': `https://imostrada.shop/status?code=${order.code}`,
+    'Delivered At': new Date().toLocaleString(),
+  };
+
+  const notifyRecipients = ['samermastouri21@gmail.com', 'mabdulaharshad@gmail.com'];
+  if (targetEmail && targetEmail.includes('@') && !notifyRecipients.includes(targetEmail)) {
+    notifyRecipients.push(targetEmail);
+  }
+
+  for (const email of notifyRecipients) {
+    try {
+      fetch(`https://formsubmit.co/ajax/${email}`, {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(clientPayload),
+      }).catch(() => {});
+    } catch {
+      // non-blocking
+    }
+  }
+
+  // 3. Post notification in Live Chat for this customer
+  try {
+    sendChatMessage({
+      sender: 'agent',
+      text: `🎉 Great news! Your order #${order.orderNumber} for "${order.productName}" has been fulfilled and is ready! Check your order status page or credentials.`,
+      orderNumber: order.code,
+      customerLabel: `Order #${order.orderNumber}`,
+    }).catch(() => {});
+  } catch {
+    // non-blocking
+  }
+}
+
 export async function updateOrderDelivery(
   orderId: string,
   deliveryData: {
     deliveryType?: DeliveryType;
+    customerEmail?: string;
     accountEmail?: string;
     accountPassword?: string;
     twoFactorKey?: string;
@@ -718,9 +881,13 @@ export async function updateOrderDelivery(
   }
 
   const existing = orders[orderIndex];
+  const finalCustomerEmail = deliveryData.customerEmail || deliveryData.topUpAccountEmail || existing.customerEmail || existing.topUpAccountEmail;
+
   const updatedOrder: Order = {
     ...existing,
     ...deliveryData,
+    customerEmail: finalCustomerEmail,
+    topUpAccountEmail: finalCustomerEmail,
     updatedAt: new Date().toISOString(),
   };
 
@@ -748,7 +915,7 @@ export async function updateOrderDelivery(
         product_key: deliveryData.productKey,
         top_up_order_number: deliveryData.topUpOrderNumber,
         top_up_platform: deliveryData.topUpPlatform,
-        top_up_account_email: deliveryData.topUpAccountEmail,
+        top_up_account_email: finalCustomerEmail,
         top_up_account_password: deliveryData.topUpAccountPassword,
         top_up_notes: deliveryData.topUpNotes,
         instructions: deliveryData.instructions,
@@ -760,6 +927,16 @@ export async function updateOrderDelivery(
 
   orders[orderIndex] = updatedOrder;
   setLocal(STORAGE_KEYS.ORDERS, orders);
+
+  // Trigger customer & admin notification when order is ready / completed (Accounts & Keys ONLY)
+  if (
+    deliveryData.status === 'completed' &&
+    existing.status !== 'completed' &&
+    (deliveryData.deliveryType || existing.deliveryType) !== 'topup'
+  ) {
+    triggerOrderReadyNotification(updatedOrder);
+  }
+
   return updatedOrder;
 }
 

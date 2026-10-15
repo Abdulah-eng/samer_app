@@ -383,22 +383,33 @@ export default function AdminPage() {
     if (!editingOrder) return;
 
     try {
+      const finalNotifEmail = editingOrder.customerEmail || (deliveryType !== 'topup' ? editingOrder.topUpAccountEmail : undefined);
+
       await updateOrderDelivery(editingOrder.id, {
         deliveryType,
+        customerEmail: finalNotifEmail,
         accountEmail: deliveryType === 'account' ? accountEmail : undefined,
         accountPassword: deliveryType === 'account' ? accountPassword : undefined,
         twoFactorKey: deliveryType === 'account' ? twoFactorKey : undefined,
         productKey: deliveryType === 'key' ? productKey : undefined,
         topUpOrderNumber: deliveryType === 'topup' ? editingOrder.topUpOrderNumber : undefined,
         topUpPlatform: deliveryType === 'topup' ? editingOrder.topUpPlatform : undefined,
-        topUpAccountEmail: deliveryType === 'topup' ? editingOrder.topUpAccountEmail : undefined,
+        topUpAccountEmail: deliveryType === 'topup' ? editingOrder.topUpAccountEmail : finalNotifEmail,
         topUpAccountPassword: deliveryType === 'topup' ? editingOrder.topUpAccountPassword : undefined,
         topUpNotes: deliveryType === 'topup' ? editingOrder.topUpNotes : undefined,
         instructions,
         status: orderStatus,
       });
 
-      showNotification('success', `Order ${editingOrder.orderNumber} updated successfully!`);
+      if (orderStatus === 'completed' && deliveryType !== 'topup' && finalNotifEmail) {
+        showNotification(
+          'success',
+          `Order ${editingOrder.orderNumber} fulfilled! Completion notification dispatched to ${finalNotifEmail}.`
+        );
+      } else {
+        showNotification('success', `Order ${editingOrder.orderNumber} updated successfully!`);
+      }
+
       setEditingOrder(null);
       loadAllData();
     } catch (err: unknown) {
@@ -1174,6 +1185,12 @@ export default function AdminPage() {
                               <div className="text-cyan-300 font-bold truncate max-w-[200px]">
                                 {o.productKey || 'Not delivered yet'}
                               </div>
+                              {o.customerEmail && (
+                                <div className="text-[10px] text-emerald-400 font-sans flex items-center gap-1 mt-0.5" title={`Alert email: ${o.customerEmail}`}>
+                                  <Mail className="w-3 h-3 text-emerald-400 shrink-0" />
+                                  <span className="truncate max-w-[170px]">{o.customerEmail}</span>
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <div>
@@ -1181,6 +1198,12 @@ export default function AdminPage() {
                                 {o.accountEmail || 'Not set yet'}
                               </div>
                               <div className="text-gray-500">Password: ••••••••</div>
+                              {o.customerEmail && (
+                                <div className="text-[10px] text-emerald-400 font-sans flex items-center gap-1 mt-0.5" title={`Alert email: ${o.customerEmail}`}>
+                                  <Mail className="w-3 h-3 text-emerald-400 shrink-0" />
+                                  <span className="truncate max-w-[170px]">{o.customerEmail}</span>
+                                </div>
+                              )}
                             </div>
                           )}
                         </td>
@@ -2420,13 +2443,25 @@ export default function AdminPage() {
             </div>
 
             <form onSubmit={saveOrderDelivery} className="space-y-4 text-xs">
-              <div className="bg-gray-950 p-3 rounded-lg border border-gray-800 space-y-1">
+              <div className="bg-gray-950 p-3 rounded-lg border border-gray-800 space-y-1.5">
                 <div>
                   Product: <strong className="text-cyan-300">{editingOrder.productName}</strong>
                 </div>
                 <div>
                   Code: <strong className="text-amber-300 font-mono">{editingOrder.code}</strong>
                 </div>
+                {(editingOrder.customerEmail || (editingOrder.deliveryType !== 'topup' && editingOrder.topUpAccountEmail)) && (
+                  <div className="flex items-center gap-1.5 pt-1 text-emerald-400">
+                    <Mail className="w-3.5 h-3.5 shrink-0" />
+                    <span>Notification Email:</span>
+                    <strong className="font-mono text-white select-all">
+                      {editingOrder.customerEmail || editingOrder.topUpAccountEmail}
+                    </strong>
+                    <span className="text-[10px] text-emerald-300 bg-emerald-950/60 border border-emerald-800/60 px-1.5 py-0.2 rounded ml-1 font-sans">
+                      Will be notified on Complete
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Delivery Type Selector */}

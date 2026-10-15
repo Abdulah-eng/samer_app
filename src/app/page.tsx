@@ -32,6 +32,7 @@ import {
   User,
   Key,
   Coins,
+  Mail,
 } from 'lucide-react';
 
 const HOME_FAQS = [
@@ -77,6 +78,7 @@ export default function HomePage() {
   });
 
   const [code, setCode] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -96,6 +98,10 @@ export default function HomePage() {
       setErrorMsg('Please enter your redeem code.');
       return;
     }
+    if (customerEmail.trim() && !customerEmail.includes('@')) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
     if (!acceptedTerms) {
       setErrorMsg('You must accept the Terms & Conditions to proceed.');
       return;
@@ -103,12 +109,13 @@ export default function HomePage() {
 
     setLoading(true);
     try {
-      const result = await verifyAndRedeemCode(code);
+      const result = await verifyAndRedeemCode(code, customerEmail);
       if (!result.success) {
         setErrorMsg(result.message);
       } else if (result.order) {
         if (result.isTopUp || result.order.deliveryType === 'topup') {
-          router.push(`/topup?code=${encodeURIComponent(result.order.code)}`);
+          const emailQuery = customerEmail.trim() ? `&email=${encodeURIComponent(customerEmail.trim())}` : '';
+          router.push(`/topup?code=${encodeURIComponent(result.order.code)}${emailQuery}`);
         } else {
           setRedeemedOrder(result.order);
         }
@@ -243,15 +250,45 @@ export default function HomePage() {
               {!redeemedOrder ? (
                 <form onSubmit={handleRedeem} className="space-y-4">
                   {/* Code input */}
-                  <input
-                    type="text"
-                    value={code}
-                    onChange={(e) => { setCode(e.target.value.toUpperCase()); setErrorMsg(''); }}
-                    placeholder="IMOS-ABCD-1234"
-                    className="w-full bg-[#07101e] border border-gray-700 hover:border-gray-600 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 rounded-xl py-3 px-4 text-sm font-mono text-gray-200 placeholder-gray-600 outline-none transition-all uppercase tracking-widest"
-                    disabled={loading}
-                    maxLength={30}
-                  />
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider block">
+                      Redeem Code <span className="text-amber-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={code}
+                      onChange={(e) => { setCode(e.target.value.toUpperCase()); setErrorMsg(''); }}
+                      placeholder="IMOS-ABCD-1234"
+                      className="w-full bg-[#07101e] border border-gray-700 hover:border-gray-600 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 rounded-xl py-3 px-4 text-sm font-mono text-gray-200 placeholder-gray-600 outline-none transition-all uppercase tracking-widest"
+                      disabled={loading}
+                      maxLength={30}
+                    />
+                  </div>
+
+                  {/* Email input for notification when order ready (Accounts & Keys) */}
+                  <div className="space-y-1.5 pt-0.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Email for Notification</span>
+                      </label>
+                      <span className="text-[10px] text-cyan-400/80 font-medium">For Accounts & Keys</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="email"
+                        value={customerEmail}
+                        onChange={(e) => { setCustomerEmail(e.target.value); setErrorMsg(''); }}
+                        placeholder="your-email@example.com"
+                        className="w-full bg-[#07101e] border border-gray-700 hover:border-gray-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 rounded-xl py-2.5 px-3.5 text-xs sm:text-sm text-gray-200 placeholder-gray-500 outline-none transition-all font-sans"
+                        disabled={loading}
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-400 leading-tight flex items-start gap-1.5 pl-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0 mt-1" />
+                      <span>We’ll send an email notification as soon as your account or key is ready.</span>
+                    </p>
+                  </div>
 
                   {errorMsg && (
                     <div className="flex items-start gap-2 bg-red-900/30 border border-red-500/40 text-red-300 text-xs p-3 rounded-xl">
@@ -348,6 +385,14 @@ export default function HomePage() {
                         <span className="font-semibold text-white">{redeemedOrder.productName}</span>
                       </div>
                     </div>
+                    {redeemedOrder.customerEmail && (
+                      <div className="flex justify-between items-center pb-2 border-b border-gray-800 gap-2">
+                        <span className="text-gray-500 shrink-0">Email Alert:</span>
+                        <span className="font-mono text-cyan-300 font-semibold text-right truncate max-w-[200px]" title={redeemedOrder.customerEmail}>
+                          {redeemedOrder.customerEmail}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-gray-500">Status:</span>
                       <span className="flex items-center gap-1.5 font-bold text-amber-400">
@@ -356,6 +401,12 @@ export default function HomePage() {
                       </span>
                     </div>
                   </div>
+                  {redeemedOrder.customerEmail && (
+                    <div className="text-[11px] text-cyan-300/90 bg-cyan-950/30 border border-cyan-800/40 rounded-xl p-2.5 flex items-center justify-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      <span>We’ll email you once your credentials are ready!</span>
+                    </div>
+                  )}
                   <button
                     onClick={() => router.push(`/status?code=${encodeURIComponent(redeemedOrder.code)}`)}
                     className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-wider text-gray-900 transition"
@@ -364,7 +415,7 @@ export default function HomePage() {
                     View Delivery Status
                   </button>
                   <button
-                    onClick={() => { setRedeemedOrder(null); setCode(''); setAcceptedTerms(false); }}
+                    onClick={() => { setRedeemedOrder(null); setCode(''); setCustomerEmail(''); setAcceptedTerms(false); }}
                     className="text-xs text-gray-500 hover:text-gray-300 transition"
                   >
                     Redeem another code

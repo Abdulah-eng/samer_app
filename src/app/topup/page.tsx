@@ -42,6 +42,7 @@ function TopUpContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const codeParam = searchParams.get('code') || '';
+  const emailParam = searchParams.get('email') || '';
 
   const [settings, setSettings] = useState<StoreSettings>({
     storeName: 'IMOSTRADA',
@@ -61,7 +62,7 @@ function TopUpContent() {
   const [productImage, setProductImage] = useState<string | undefined>(undefined);
   const [orderNumber, setOrderNumber] = useState('');
   const [platform, setPlatform] = useState<'GAMIVO' | 'G2A' | 'Driffle' | 'Other'>('GAMIVO');
-  const [accountEmail, setAccountEmail] = useState('');
+  const [accountEmail, setAccountEmail] = useState(emailParam);
   const [accountPassword, setAccountPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [additionalNotes, setAdditionalNotes] = useState('');

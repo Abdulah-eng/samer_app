@@ -19,6 +19,10 @@ export async function POST(req: Request) {
       deliveryType,
       timestamp,
       hasImage,
+      customerEmail,
+      twoFactorKey,
+      productKey,
+      instructions,
     } = body;
 
     const recipients = ['samermastouri21@gmail.com', 'mabdulaharshad@gmail.com'];
@@ -26,7 +30,45 @@ export async function POST(req: Request) {
 
     const uniqueTag = Math.floor(1000 + Math.random() * 9000);
 
-    if (type === 'topup' || action === 'topup_submitted') {
+    if (type === 'order_ready' || type === 'order_completed' || action === 'order_ready') {
+      const isAccount = (deliveryType || 'account') === 'account';
+      const isKey = deliveryType === 'key';
+      payload = {
+        _subject: `🎉 [ORDER READY #${uniqueTag}] Your ${productName || 'Digital Product'} is Ready! (Order #${orderNumber || 'N/A'})`,
+        _template: 'box',
+        _captcha: 'false',
+        'Event': '🎉 Order Ready & Delivered to Customer',
+        'Product': productName || 'Digital Product',
+        'Order Number': orderNumber || 'N/A',
+        'Redeem Code': code || 'N/A',
+        'Delivery Type': (deliveryType || 'account').toUpperCase(),
+        'Customer Notification Email': customerEmail || 'N/A',
+        ...(isAccount
+          ? {
+              'Delivered Account Email': accountEmail || 'N/A',
+              'Delivered Account Password': accountPassword || 'N/A',
+              'Two-Factor / Security Key': twoFactorKey || 'None',
+            }
+          : {}),
+        ...(isKey
+          ? {
+              'Delivered Product Key': productKey || 'N/A',
+            }
+          : {}),
+        'Setup Instructions': instructions || 'Please check your Order Status page for full login and activation guide.',
+        'View Order Status Online': `https://imostrada.shop/status?code=${code || orderNumber || ''}`,
+        'Reference ID': `#${uniqueTag}`,
+        'Delivered At': timestamp || new Date().toLocaleString(),
+      };
+
+      // Add customer email to recipients list if provided
+      if (customerEmail && typeof customerEmail === 'string' && customerEmail.includes('@')) {
+        const cleanCustomerEmail = customerEmail.trim();
+        if (!recipients.includes(cleanCustomerEmail)) {
+          recipients.push(cleanCustomerEmail);
+        }
+      }
+    } else if (type === 'topup' || action === 'topup_submitted') {
       payload = {
         _subject: `⚡ [TOP-UP #${uniqueTag}] Order #${orderNumber || 'N/A'} - ${productName || 'Top Up'}`,
         _template: 'box',
@@ -52,6 +94,7 @@ export async function POST(req: Request) {
         'Product': productName || 'Digital Product',
         'Order Number': orderNumber || 'N/A',
         'Delivery Workflow': (deliveryType || 'account').toUpperCase(),
+        'Customer Notification Email': customerEmail || 'None provided',
         'Status': 'Processing',
         'Reference ID': `#${uniqueTag}`,
         'Redeemed At': timestamp || new Date().toLocaleString(),

@@ -32,6 +32,8 @@ export interface Order {
   productImageUrl?: string;
   status: OrderStatus;
   deliveryType?: DeliveryType;
+  // Customer Notification Email (for Accounts and Keys):
+  customerEmail?: string;
   // Account Delivery:
   accountEmail?: string;
   accountPassword?: string;

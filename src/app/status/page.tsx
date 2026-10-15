@@ -6,7 +6,7 @@ import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { TermsModal } from '@/components/TermsModal';
 import { LiveChatWidget } from '@/components/LiveChatWidget';
-import { getStoreSettings, getOrderDetails, submitTopUpRequest, sendChatMessage } from '@/lib/store';
+import { getStoreSettings, getOrderDetails, submitTopUpRequest, sendChatMessage, updateOrderNotificationEmail } from '@/lib/store';
 import { StoreSettings, Order } from '@/lib/types';
 import {
   Search,
@@ -67,6 +67,13 @@ function OrderStatusContent() {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Notification Email State (Accounts & Keys)
+  const [notifEmailInput, setNotifEmailInput] = useState('');
+  const [isEditingNotifEmail, setIsEditingNotifEmail] = useState(false);
+  const [savingNotifEmail, setSavingNotifEmail] = useState(false);
+  const [notifEmailSuccess, setNotifEmailSuccess] = useState('');
+  const [notifEmailError, setNotifEmailError] = useState('');
+
   useEffect(() => {
     getStoreSettings().then(setSettings);
     if (initialCode) {
@@ -102,12 +109,41 @@ function OrderStatusContent() {
         } else {
           setIsEditingTopUp(false);
         }
+
+        // Notification email for accounts/keys
+        const notif = data.customerEmail || (data.deliveryType !== 'topup' ? data.topUpAccountEmail : '') || '';
+        setNotifEmailInput(notif);
+        setIsEditingNotifEmail(false);
       }
     } catch (e) {
       console.error('Error fetching order', e);
       setOrder(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveNotifEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!order) return;
+    const clean = notifEmailInput.trim();
+    if (!clean || !clean.includes('@')) {
+      setNotifEmailError('Please enter a valid email address.');
+      return;
+    }
+
+    setSavingNotifEmail(true);
+    setNotifEmailError('');
+    try {
+      const updated = await updateOrderNotificationEmail(order.id, clean);
+      setOrder(updated);
+      setIsEditingNotifEmail(false);
+      setNotifEmailSuccess('Notification email saved! You will receive an alert once your order is ready.');
+      setTimeout(() => setNotifEmailSuccess(''), 6000);
+    } catch {
+      setNotifEmailError('Failed to save email. Please try again.');
+    } finally {
+      setSavingNotifEmail(false);
     }
   };
 
@@ -782,6 +818,85 @@ function OrderStatusContent() {
                         </div>
                         <span className="text-gray-400">Credentials / Key Delivered</span>
                       </div>
+                    </div>
+
+                    {/* Email Notification Card (Accounts & Keys) */}
+                    <div className="pt-2 max-w-md mx-auto text-left">
+                      {order.customerEmail && !isEditingNotifEmail ? (
+                        <div className="bg-[#091527] border border-cyan-500/40 rounded-xl p-3.5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-xs uppercase tracking-wider">
+                              <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>Email Notification Active</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsEditingNotifEmail(true);
+                                setNotifEmailInput(order.customerEmail || '');
+                              }}
+                              className="text-[11px] text-gray-400 hover:text-white underline cursor-pointer"
+                            >
+                              Change
+                            </button>
+                          </div>
+                          <div className="font-mono text-cyan-200 text-xs font-semibold select-all">
+                            {order.customerEmail}
+                          </div>
+                          <p className="text-[11px] text-gray-400 leading-tight">
+                            ✓ We will email your credentials/product key directly to this address as soon as our team fulfills your order.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="bg-[#091527] border border-gray-700 hover:border-cyan-500/40 rounded-xl p-3.5 space-y-2.5 transition">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
+                              <Mail className="w-3.5 h-3.5" />
+                            </div>
+                            <div>
+                              <h5 className="text-xs font-bold text-white uppercase tracking-wider">
+                                Get Email Alert When Ready
+                              </h5>
+                              <p className="text-[11px] text-gray-400 leading-tight">
+                                Enter your email to receive your account or key as soon as it's ready.
+                              </p>
+                            </div>
+                          </div>
+                          <form onSubmit={handleSaveNotifEmail} className="flex flex-col sm:flex-row gap-2">
+                            <input
+                              type="email"
+                              value={notifEmailInput}
+                              onChange={(e) => {
+                                setNotifEmailInput(e.target.value);
+                                setNotifEmailError('');
+                              }}
+                              placeholder="your-email@example.com"
+                              className="flex-1 bg-[#050b14] border border-gray-700 focus:border-cyan-400 rounded-xl py-2 px-3 text-xs text-gray-200 placeholder-gray-500 outline-none font-sans"
+                              disabled={savingNotifEmail}
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="submit"
+                                disabled={savingNotifEmail}
+                                className="py-2 px-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold text-xs uppercase tracking-wider shrink-0 transition cursor-pointer disabled:opacity-60"
+                              >
+                                {savingNotifEmail ? 'Saving...' : 'Save Email'}
+                              </button>
+                              {isEditingNotifEmail && (
+                                <button
+                                  type="button"
+                                  onClick={() => setIsEditingNotifEmail(false)}
+                                  className="py-2 px-3 rounded-xl bg-gray-800 text-gray-400 hover:text-white text-xs cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                            </div>
+                          </form>
+                          {notifEmailError && <p className="text-[11px] text-rose-400 font-medium">{notifEmailError}</p>}
+                          {notifEmailSuccess && <p className="text-[11px] text-emerald-400 font-medium">{notifEmailSuccess}</p>}
+                        </div>
+                      )}
                     </div>
 
                     <div className="pt-4 text-[11px] text-gray-400 border-t border-gray-800">

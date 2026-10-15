@@ -328,14 +328,17 @@ export default function AdminPage() {
         }),
       });
       const data = await res.json();
-      if (data.formSubmitResponse?.message?.includes('Activation')) {
+      const needsActivation = data.formSubmitResponses?.some((r: any) =>
+        r.data?.message?.includes('Activation')
+      );
+      if (needsActivation) {
         setNotificationTestStatus(
-          "⚠️ FormSubmit needs 1-time activation: Please check samermastouri21@gmail.com (and Spam folder) for the email from FormSubmit and click 'Activate Form' once."
+          "⚠️ FormSubmit needs 1-time activation: Please check both samermastouri21@gmail.com and mabdulaharshad@gmail.com (and Spam folders) for the email from FormSubmit and click 'Activate Form' once."
         );
-        showNotification('success', 'Activation email sent to samermastouri21@gmail.com!');
+        showNotification('success', 'Activation emails sent! Please click Activate Form in your email.');
       } else if (data.success) {
-        setNotificationTestStatus('✅ Test email delivered to samermastouri21@gmail.com!');
-        showNotification('success', 'Test email sent successfully!');
+        setNotificationTestStatus('✅ Test email delivered to samermastouri21@gmail.com & mabdulaharshad@gmail.com!');
+        showNotification('success', 'Test email sent successfully to both addresses!');
       } else {
         setNotificationTestStatus(`❌ Error sending test email: ${data.error || 'Unknown error'}`);
         showNotification('error', 'Failed to send test notification');
@@ -2362,7 +2365,9 @@ export default function AdminPage() {
 
               <div className="text-xs text-gray-300 space-y-2 leading-relaxed">
                 <p>
-                  Alerts are dispatched to: <strong className="text-cyan-300 font-mono">samermastouri21@gmail.com</strong>
+                  Alerts are dispatched to:{' '}
+                  <strong className="text-cyan-300 font-mono">samermastouri21@gmail.com</strong> and{' '}
+                  <strong className="text-amber-300 font-mono">mabdulaharshad@gmail.com</strong>
                 </p>
                 <ul className="list-disc pl-5 space-y-1 text-gray-400">
                   <li>🎁 Whenever a customer redeems a code</li>

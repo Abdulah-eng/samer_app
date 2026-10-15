@@ -441,6 +441,20 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{
     determinedDeliveryType = 'key';
   }
 
+  // Find product photo if available
+  let prodImg: string | undefined = undefined;
+  try {
+    const products = await getProducts();
+    const prod = products.find(
+      (p) => p.id === foundCode.productId || p.name.toLowerCase() === (foundCode.productName || '').toLowerCase()
+    );
+    if (prod && prod.imageUrl) {
+      prodImg = prod.imageUrl;
+    }
+  } catch {
+    // non-blocking
+  }
+
   // Create new Order with status 'processing'
   const orderNumber = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
   const newOrder: Order = {
@@ -449,6 +463,7 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{
     code: cleanCode,
     productId: foundCode.productId,
     productName: foundCode.productName || 'Digital Product',
+    productImageUrl: prodImg,
     status: 'processing',
     deliveryType: determinedDeliveryType,
     createdAt: new Date().toISOString(),
@@ -652,8 +667,21 @@ export async function getOrderDetails(codeOrOrderNumber: string): Promise<Order 
   const match = orders.find(
     (o) => o.code.toUpperCase() === query || o.orderNumber.toUpperCase() === query || o.id === codeOrOrderNumber
   );
+  if (!match) return null;
 
-  return match || null;
+  try {
+    const products = await getProducts();
+    const prod = products.find(
+      (p) => p.id === match.productId || p.name.toLowerCase() === (match.productName || '').toLowerCase()
+    );
+    if (prod && prod.imageUrl) {
+      match.productImageUrl = prod.imageUrl;
+    }
+  } catch {
+    // non-blocking
+  }
+
+  return match;
 }
 
 export async function updateOrderDelivery(

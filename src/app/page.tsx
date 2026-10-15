@@ -335,9 +335,18 @@ export default function HomePage() {
                       <span className="text-gray-500">Order #:</span>
                       <span className="font-mono font-bold text-amber-400">{redeemedOrder.orderNumber}</span>
                     </div>
-                    <div className="flex justify-between pb-2 border-b border-gray-800">
-                      <span className="text-gray-500">Product:</span>
-                      <span className="font-semibold text-white">{redeemedOrder.productName}</span>
+                    <div className="flex justify-between items-center pb-2 border-b border-gray-800 gap-2">
+                      <span className="text-gray-500 shrink-0">Product:</span>
+                      <div className="flex items-center gap-2 text-right">
+                        {redeemedOrder.productImageUrl && (
+                          <img
+                            src={redeemedOrder.productImageUrl}
+                            alt={redeemedOrder.productName}
+                            className="w-7 h-7 rounded object-cover border border-gray-700 bg-black shrink-0"
+                          />
+                        )}
+                        <span className="font-semibold text-white">{redeemedOrder.productName}</span>
+                      </div>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">Status:</span>

@@ -21,7 +21,7 @@ export async function POST(req: Request) {
       hasImage,
     } = body;
 
-    const email = 'samermastouri21@gmail.com';
+    const recipients = ['samermastouri21@gmail.com', 'mabdulaharshad@gmail.com'];
     let payload: Record<string, string> = {};
 
     if (type === 'topup' || action === 'topup_submitted') {
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
         _captcha: 'false',
         'Event': 'Notification System Test',
         'Status': 'ACTIVE & FUNCTIONAL',
-        'Notification Target': email,
+        'Notification Targets': recipients.join(', '),
         'Timestamp': timestamp || new Date().toLocaleString(),
       };
     } else {
@@ -77,22 +77,30 @@ export async function POST(req: Request) {
       };
     }
 
-    const res = await fetch(`https://formsubmit.co/ajax/${email}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Origin: 'https://imostrada.shop',
-        Referer: 'https://imostrada.shop/',
-      },
-      body: JSON.stringify(payload),
-    });
+    const responses = await Promise.all(
+      recipients.map(async (targetEmail) => {
+        try {
+          const res = await fetch(`https://formsubmit.co/ajax/${targetEmail}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              Origin: 'https://imostrada.shop',
+              Referer: 'https://imostrada.shop/',
+            },
+            body: JSON.stringify({ ...payload, _cc: recipients.filter((e) => e !== targetEmail).join(',') }),
+          });
+          const data = await res.json().catch(() => ({}));
+          return { targetEmail, data };
+        } catch (err: any) {
+          return { targetEmail, error: err.message };
+        }
+      })
+    );
 
-    const data = await res.json().catch(() => ({}));
-
-    return NextResponse.json({ success: true, formSubmitResponse: data });
+    return NextResponse.json({ success: true, formSubmitResponses: responses });
   } catch (error: any) {
     console.error('Email notification error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

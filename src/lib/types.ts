@@ -29,6 +29,7 @@ export interface Order {
   code: string;
   productId: string;
   productName: string;
+  productImageUrl?: string;
   status: OrderStatus;
   deliveryType?: DeliveryType;
   // Account Delivery:

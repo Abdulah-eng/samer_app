@@ -21,6 +21,8 @@ import {
   AlertCircle,
   HelpCircle,
   Grid,
+  Package,
+  ShieldAlert,
 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
@@ -32,6 +34,7 @@ import {
   getStoreSettings,
   verifyAndRedeemCode,
   sendChatMessage,
+  getProducts,
 } from '@/lib/store';
 import { StoreSettings, Order } from '@/lib/types';
 
@@ -55,6 +58,7 @@ function TopUpContent() {
   // Form Fields
   const [code, setCode] = useState(codeParam);
   const [productName, setProductName] = useState('Fortnite 800 V-Bucks Top Up');
+  const [productImage, setProductImage] = useState<string | undefined>(undefined);
   const [orderNumber, setOrderNumber] = useState('');
   const [platform, setPlatform] = useState<'GAMIVO' | 'G2A' | 'Driffle' | 'Other'>('GAMIVO');
   const [accountEmail, setAccountEmail] = useState('');
@@ -73,10 +77,19 @@ function TopUpContent() {
       }
 
       try {
+        const prods = await getProducts();
         const foundOrder = await getOrderDetails(codeParam);
         if (foundOrder) {
           setOrder(foundOrder);
           setProductName(foundOrder.productName || 'Top-Up Service');
+          const matched = prods.find(
+            (p) =>
+              p.id === foundOrder.productId ||
+              p.name.toLowerCase() === (foundOrder.productName || '').toLowerCase()
+          );
+          if (matched?.imageUrl) setProductImage(matched.imageUrl);
+          else if (foundOrder.productImageUrl) setProductImage(foundOrder.productImageUrl);
+
           if (foundOrder.topUpOrderNumber) setOrderNumber(foundOrder.topUpOrderNumber);
           if (foundOrder.topUpPlatform) setPlatform(foundOrder.topUpPlatform as any);
           if (foundOrder.topUpAccountEmail) setAccountEmail(foundOrder.topUpAccountEmail);
@@ -88,6 +101,13 @@ function TopUpContent() {
           if (res.order) {
             setOrder(res.order);
             setProductName(res.order.productName || 'Top-Up Service');
+            const matched = prods.find(
+              (p) =>
+                p.id === res.order!.productId ||
+                p.name.toLowerCase() === (res.order!.productName || '').toLowerCase()
+            );
+            if (matched?.imageUrl) setProductImage(matched.imageUrl);
+            else if (res.order.productImageUrl) setProductImage(res.order.productImageUrl);
           }
         }
       } catch (e) {
@@ -250,8 +270,26 @@ function TopUpContent() {
               {/* Product Box */}
               <div>
                 <label className="text-xs font-semibold text-gray-400 block mb-1.5">Product</label>
-                <div className="bg-[#060b13] border border-gray-800 rounded-xl p-3.5 text-sm sm:text-base font-bold text-amber-400">
-                  {productName}
+                <div className="bg-[#060b13] border border-gray-800 rounded-xl p-3 sm:p-4 flex items-center gap-3.5">
+                  {productImage ? (
+                    <img
+                      src={productImage}
+                      alt={productName}
+                      className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover border border-amber-400/30 bg-black shrink-0 shadow-md shadow-amber-500/10"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-amber-500/20 to-cyan-500/20 border border-gray-700/80 flex items-center justify-center text-amber-400 shrink-0">
+                      <Package className="w-7 h-7" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
+                      TOP-UP SERVICE
+                    </span>
+                    <h3 className="text-sm sm:text-base font-bold text-amber-400 leading-snug">
+                      {productName}
+                    </h3>
+                  </div>
                 </div>
               </div>
 
@@ -375,6 +413,22 @@ function TopUpContent() {
                 </div>
               </div>
 
+              {/* Supported Platforms Banner */}
+              <div className="rounded-xl overflow-hidden border border-gray-800 bg-[#040810] p-2.5 space-y-1.5">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[11px] font-semibold text-gray-400">
+                    Platform Account (Email of the platform account you use):
+                  </span>
+                </div>
+                <div className="w-full rounded-lg overflow-hidden border border-gray-800/80 bg-black/40 p-1 flex items-center justify-center">
+                  <img
+                    src="/platform-logos.png"
+                    alt="Supported Platforms"
+                    className="w-full max-h-14 sm:max-h-16 object-contain"
+                  />
+                </div>
+              </div>
+
               {/* Row 2: Account Email & Password */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Account Email */}
@@ -418,6 +472,17 @@ function TopUpContent() {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                </div>
+              </div>
+
+              {/* 2FA Warning / Notice */}
+              <div className="p-3 sm:p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-xs">
+                <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-0.5">
+                  <div className="font-bold text-amber-300">Fast Delivery Requirement:</div>
+                  <p className="text-amber-200/90 leading-relaxed font-medium">
+                    To ensure the fastest possible top-up, please temporarily disable 2FA on your platform account during this time.
+                  </p>
                 </div>
               </div>
 

@@ -31,6 +31,8 @@ import {
   Grid,
   AlertCircle,
   Edit3,
+  Package,
+  ShieldAlert,
 } from 'lucide-react';
 
 function OrderStatusContent() {
@@ -260,15 +262,28 @@ function OrderStatusContent() {
           <div className="w-full max-w-2xl bg-[#09111d] border border-gray-800 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6 animate-fade-in">
             {/* Header / Order Summary */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-gray-800 gap-4">
-              <div>
-                <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest block">
-                  Order Details
-                </span>
-                <h3 className="text-xl font-extrabold text-white mt-0.5">{order.productName}</h3>
-                <div className="flex items-center space-x-3 text-xs text-gray-400 mt-1 font-mono">
-                  <span>Order #: <strong className="text-amber-400">{order.orderNumber}</strong></span>
-                  <span>•</span>
-                  <span>Code: <strong className="text-cyan-400">{order.code}</strong></span>
+              <div className="flex items-center gap-3.5 sm:gap-4">
+                {order.productImageUrl ? (
+                  <img
+                    src={order.productImageUrl}
+                    alt={order.productName}
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover border border-amber-400/30 bg-black shrink-0 shadow-lg shadow-amber-500/10"
+                  />
+                ) : (
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-amber-500/20 to-cyan-500/20 border border-gray-800 flex items-center justify-center text-amber-400 shrink-0">
+                    <Package className="w-7 h-7" />
+                  </div>
+                )}
+                <div>
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest block">
+                    Order Details
+                  </span>
+                  <h3 className="text-lg sm:text-xl font-extrabold text-white mt-0.5">{order.productName}</h3>
+                  <div className="flex items-center space-x-3 text-xs text-gray-400 mt-1 font-mono">
+                    <span>Order #: <strong className="text-amber-400">{order.orderNumber}</strong></span>
+                    <span>•</span>
+                    <span>Code: <strong className="text-cyan-400">{order.code}</strong></span>
+                  </div>
                 </div>
               </div>
 
@@ -348,8 +363,26 @@ function OrderStatusContent() {
                       {/* Product */}
                       <div>
                         <label className="text-xs font-semibold text-gray-400 block mb-1">Product</label>
-                        <div className="bg-[#050912] border border-gray-800 rounded-xl p-3 text-sm font-bold text-amber-400">
-                          {order.productName}
+                        <div className="bg-[#050912] border border-gray-800 rounded-xl p-3 sm:p-3.5 flex items-center gap-3">
+                          {order.productImageUrl ? (
+                            <img
+                              src={order.productImageUrl}
+                              alt={order.productName}
+                              className="w-12 h-12 rounded-lg object-cover border border-amber-400/30 bg-black shrink-0"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg bg-amber-500/10 border border-gray-800 flex items-center justify-center text-amber-400 shrink-0">
+                              <Package className="w-6 h-6" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                              TOP-UP SERVICE
+                            </span>
+                            <div className="text-xs sm:text-sm font-bold text-amber-400 truncate">
+                              {order.productName}
+                            </div>
+                          </div>
                         </div>
                       </div>
 
@@ -406,6 +439,20 @@ function OrderStatusContent() {
                         </div>
                       </div>
 
+                      {/* Supported Platforms Banner */}
+                      <div className="rounded-xl overflow-hidden border border-gray-800 bg-[#040810] p-2 sm:p-2.5 space-y-1">
+                        <span className="text-[11px] font-semibold text-gray-400 px-1 block">
+                          Platform Account (Email of the platform account you use):
+                        </span>
+                        <div className="w-full rounded-lg overflow-hidden border border-gray-800/80 bg-black/40 p-1 flex items-center justify-center">
+                          <img
+                            src="/platform-logos.png"
+                            alt="Supported Platforms"
+                            className="w-full max-h-12 sm:max-h-14 object-contain"
+                          />
+                        </div>
+                      </div>
+
                       {/* Row 2: Account Email & Password */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -447,6 +494,17 @@ function OrderStatusContent() {
                               {formShowPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                           </div>
+                        </div>
+                      </div>
+
+                      {/* 2FA Warning / Notice */}
+                      <div className="p-3 sm:p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-xs">
+                        <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-amber-300">Fast Delivery Requirement:</div>
+                          <p className="text-amber-200/90 leading-relaxed font-medium">
+                            To ensure the fastest possible top-up, please temporarily disable 2FA on your platform account during this time.
+                          </p>
                         </div>
                       </div>
 

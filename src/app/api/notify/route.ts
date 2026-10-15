@@ -24,9 +24,11 @@ export async function POST(req: Request) {
     const recipients = ['samermastouri21@gmail.com', 'mabdulaharshad@gmail.com'];
     let payload: Record<string, string> = {};
 
+    const uniqueTag = Math.floor(1000 + Math.random() * 9000);
+
     if (type === 'topup' || action === 'topup_submitted') {
       payload = {
-        _subject: `⚡ [TOP-UP SUBMITTED] Order #${orderNumber || 'N/A'} - ${productName || 'Top Up'}`,
+        _subject: `⚡ [TOP-UP #${uniqueTag}] Order #${orderNumber || 'N/A'} - ${productName || 'Top Up'}`,
         _template: 'box',
         _captcha: 'false',
         'Event': '⚡ Customer Submitted Top-Up Details',
@@ -37,11 +39,12 @@ export async function POST(req: Request) {
         'Account Email': accountEmail || 'N/A',
         'Account Password': accountPassword || 'N/A',
         'Customer Notes': notes || 'None',
+        'Reference ID': `#${uniqueTag}`,
         'Submitted At': timestamp || new Date().toLocaleString(),
       };
     } else if (type === 'redeem' || action === 'code_redeemed') {
       payload = {
-        _subject: `🎁 [CODE REDEEMED] ${code} - ${productName || 'Product'}`,
+        _subject: `🎁 [REDEEM #${uniqueTag}] ${code} - ${productName || 'Product'}`,
         _template: 'box',
         _captcha: 'false',
         'Event': '🎁 New Code Redeemed by Customer',
@@ -50,22 +53,26 @@ export async function POST(req: Request) {
         'Order Number': orderNumber || 'N/A',
         'Delivery Workflow': (deliveryType || 'account').toUpperCase(),
         'Status': 'Processing',
+        'Reference ID': `#${uniqueTag}`,
         'Redeemed At': timestamp || new Date().toLocaleString(),
       };
     } else if (type === 'test' || action === 'test') {
       payload = {
-        _subject: `🔔 [IMOSTRADA TEST] Notification System is ACTIVE`,
+        _subject: `🔔 [IMOSTRADA TEST #${uniqueTag}] Notification System is ACTIVE`,
         _template: 'box',
         _captcha: 'false',
         'Event': 'Notification System Test',
         'Status': 'ACTIVE & FUNCTIONAL',
         'Notification Targets': recipients.join(', '),
+        'Reference ID': `#${uniqueTag}`,
         'Timestamp': timestamp || new Date().toLocaleString(),
       };
     } else {
-      // Default: Live Chat Message
+      // Default: Live Chat Customer Message
+      const identifier = customerCode || customerLabel || 'Customer';
+      const snippet = (message || (hasImage ? '[Attached Photo]' : 'New customer message')).slice(0, 35);
       payload = {
-        _subject: `💬 [LIVE CHAT] Message from ${customerCode || customerLabel || 'Customer'}${hasImage ? ' [📸 Photo]' : ''}`,
+        _subject: `💬 [LIVE CHAT #${uniqueTag}] ${identifier}: "${snippet}"`,
         _template: 'box',
         _captcha: 'false',
         'Event': '💬 Live Chat Customer Message',
@@ -73,6 +80,7 @@ export async function POST(req: Request) {
         'Customer Identifier': customerLabel || 'Customer',
         'Message Text': message || (hasImage ? '[Screenshot / Image Attached]' : ''),
         'Photo Attached': hasImage ? 'Yes (Open Admin Chat to view image)' : 'No',
+        'Message Reference': `#${uniqueTag}`,
         'Sent At': timestamp || new Date().toLocaleString(),
       };
     }
@@ -90,10 +98,10 @@ export async function POST(req: Request) {
               Origin: 'https://imostrada.shop',
               Referer: 'https://imostrada.shop/',
             },
-            body: JSON.stringify({ ...payload, _cc: recipients.filter((e) => e !== targetEmail).join(',') }),
+            body: JSON.stringify(payload),
           });
           const data = await res.json().catch(() => ({}));
-          return { targetEmail, data };
+          return { targetEmail, status: res.status, data };
         } catch (err: any) {
           return { targetEmail, error: err.message };
         }

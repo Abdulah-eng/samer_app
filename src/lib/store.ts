@@ -65,6 +65,15 @@ const INITIAL_CODES: RedeemCode[] = [
     status: 'unused',
     createdAt: '2026-10-01T00:00:00.000Z',
   },
+  {
+    id: 'code-4',
+    code: 'TEST-CODE-8899',
+    productId: 'prod-1',
+    productName: 'Xbox Game Pass Ultimate 12 Months Account',
+    deliveryType: 'account',
+    status: 'unused',
+    createdAt: '2026-10-01T00:00:00.000Z',
+  },
 ];
 
 const INITIAL_ORDERS: Order[] = [];
@@ -839,6 +848,85 @@ export async function getChatMessages(sessionId?: string): Promise<ChatMessage[]
   return sanitizedLocal;
 }
 
+// ---------------- LIVE CHAT EMAIL NOTIFICATION DISPATCHER ----------------
+export async function triggerChatEmailNotification(payload: {
+  message?: string;
+  hasImage?: boolean;
+  customerCode?: string;
+  customerLabel?: string;
+  timestamp?: string;
+}) {
+  if (typeof window === 'undefined') return;
+
+  const timestamp = payload.timestamp || new Date().toLocaleString();
+  const customerCode = payload.customerCode || '';
+  const customerLabel = payload.customerLabel || (customerCode ? `Code: ${customerCode}` : 'Customer');
+  const messageText = payload.message || (payload.hasImage ? '[Attached Screenshot / Photo]' : '');
+  const randTag = Math.floor(1000 + Math.random() * 9000);
+
+  const notifyBody = {
+    type: 'chat',
+    action: 'chat_message',
+    message: messageText,
+    hasImage: Boolean(payload.hasImage),
+    customerCode: customerCode,
+    customerLabel: customerLabel,
+    timestamp: timestamp,
+  };
+
+  try {
+    // 1. Primary Route: Next.js API route (/api/notify) with keepalive
+    const res = await fetch('/api/notify', {
+      method: 'POST',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(notifyBody),
+    });
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.log(`[Chat Email Dispatched #${randTag}]:`, data);
+      return data;
+    }
+    throw new Error(`API returned status ${res.status}`);
+  } catch (err) {
+    console.warn(`[/api/notify attempt failed, executing direct FormSubmit fallback #${randTag}]:`, err);
+
+    // 2. Resilient Direct Fallback: Client-side FormSubmit AJAX (CORS enabled)
+    const snippet = (messageText || (payload.hasImage ? '[Attached Photo]' : 'New message')).slice(0, 35);
+    const identifier = customerCode || customerLabel || 'Customer';
+    const formPayload = {
+      _subject: `💬 [LIVE CHAT #${randTag}] ${identifier}: "${snippet}"`,
+      _template: 'box',
+      _captcha: 'false',
+      'Event': '💬 Live Chat Customer Message',
+      'Redeem Code / Order': customerCode || 'N/A',
+      'Customer Identifier': customerLabel || 'Customer',
+      'Message Text': messageText,
+      'Photo Attached': payload.hasImage ? 'Yes (Open Admin Chat to view image)' : 'No',
+      'Message Reference': `#${randTag}`,
+      'Sent At': timestamp,
+    };
+
+    const targetEmails = ['mabdulaharshad@gmail.com', 'samermastouri21@gmail.com'];
+    for (const email of targetEmails) {
+      try {
+        fetch(`https://formsubmit.co/ajax/${email}`, {
+          method: 'POST',
+          keepalive: true,
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify(formPayload),
+        }).catch(() => {});
+      } catch {
+        // non-blocking
+      }
+    }
+  }
+}
+
 export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>): Promise<ChatMessage> {
   const newMsg: ChatMessage = {
     id: 'msg-' + Date.now(),
@@ -850,6 +938,17 @@ export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>
     customerLabel: msg.customerLabel,
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   };
+
+  // Trigger email alert to admin on EVERY customer message immediately (non-blocking, parallel)
+  if (newMsg.sender === 'user' && typeof window !== 'undefined') {
+    triggerChatEmailNotification({
+      message: newMsg.text,
+      hasImage: Boolean(newMsg.imageUrl),
+      customerCode: newMsg.orderNumber,
+      customerLabel: newMsg.customerLabel,
+      timestamp: new Date().toLocaleString(),
+    });
+  }
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -881,28 +980,6 @@ export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>
   const existing = getLocal<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, []);
   const updated = [...existing, newMsg];
   setLocal(STORAGE_KEYS.CHAT_MESSAGES, updated);
-
-  // Trigger email alert to admin on customer message
-  if (newMsg.sender === 'user' && typeof window !== 'undefined') {
-    fetch('/api/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: newMsg.text || (newMsg.imageUrl ? '[Attached Image / Screenshot]' : ''),
-        hasImage: Boolean(newMsg.imageUrl),
-        customerCode: newMsg.orderNumber,
-        customerLabel: newMsg.customerLabel,
-        timestamp: newMsg.timestamp,
-      }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        console.log('[Chat Notification Dispatched]:', data);
-      })
-      .catch((err) => {
-        console.warn('Chat notification error:', err);
-      });
-  }
 
   // Dispatch custom window event so customer widget and admin panel update instantly
   if (typeof window !== 'undefined') {

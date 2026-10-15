@@ -894,9 +894,14 @@ export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>
         customerLabel: newMsg.customerLabel,
         timestamp: newMsg.timestamp,
       }),
-    }).catch(() => {
-      // non-blocking
-    });
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log('[Chat Notification Dispatched]:', data);
+      })
+      .catch((err) => {
+        console.warn('Chat notification error:', err);
+      });
   }
 
   // Dispatch custom window event so customer widget and admin panel update instantly

@@ -100,6 +100,7 @@ export async function POST(req: Request) {
       })
     );
 
+    console.log('[NOTIFY Route Responses]:', JSON.stringify(responses));
     return NextResponse.json({ success: true, formSubmitResponses: responses });
   } catch (error: any) {
     console.error('Email notification error:', error);

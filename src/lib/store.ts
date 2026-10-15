@@ -1,6 +1,5 @@
 import { Product, RedeemCode, Order, StoreSettings, OrderStatus, DeliveryType, ChatMessage } from './types';
 import { supabase, isSupabaseConfigured } from './supabase';
-import { dispatchNotificationEmail } from './notifications';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'delivery_portal_products',
@@ -502,16 +501,22 @@ export async function verifyAndRedeemCode(rawCode: string): Promise<{
   const existingOrders = await getOrders();
   setLocal(STORAGE_KEYS.ORDERS, [newOrder, ...existingOrders]);
 
-  // Trigger email notification to admin on code redemption (both recipients)
+  // Trigger email notification to admin on code redemption
   if (typeof window !== 'undefined') {
-    dispatchNotificationEmail({
-      type: 'redeem',
-      action: 'code_redeemed',
-      code: cleanCode,
-      productName: newOrder.productName,
-      orderNumber: orderNumber,
-      deliveryType: determinedDeliveryType,
-      timestamp: new Date().toLocaleString(),
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'redeem',
+        action: 'code_redeemed',
+        code: cleanCode,
+        productName: newOrder.productName,
+        orderNumber: orderNumber,
+        deliveryType: determinedDeliveryType,
+        timestamp: new Date().toLocaleString(),
+      }),
+    }).catch(() => {
+      // non-blocking
     });
   }
 
@@ -568,19 +573,25 @@ export async function submitTopUpRequest(
   orders[orderIndex] = updatedOrder;
   setLocal(STORAGE_KEYS.ORDERS, orders);
 
-  // Trigger email notification to admin on top-up submission (both recipients)
+  // Trigger email notification to admin on top-up submission
   if (typeof window !== 'undefined') {
-    dispatchNotificationEmail({
-      type: 'topup',
-      action: 'topup_submitted',
-      code: updatedOrder.code,
-      productName: updatedOrder.productName,
-      orderNumber: topUpData.topUpOrderNumber || updatedOrder.orderNumber,
-      platform: topUpData.topUpPlatform,
-      accountEmail: topUpData.topUpAccountEmail,
-      accountPassword: topUpData.topUpAccountPassword,
-      notes: topUpData.topUpNotes,
-      timestamp: new Date().toLocaleString(),
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'topup',
+        action: 'topup_submitted',
+        code: updatedOrder.code,
+        productName: updatedOrder.productName,
+        orderNumber: topUpData.topUpOrderNumber || updatedOrder.orderNumber,
+        platform: topUpData.topUpPlatform,
+        accountEmail: topUpData.topUpAccountEmail,
+        accountPassword: topUpData.topUpAccountPassword,
+        notes: topUpData.topUpNotes,
+        timestamp: new Date().toLocaleString(),
+      }),
+    }).catch(() => {
+      // non-blocking
     });
   }
 
@@ -845,15 +856,75 @@ export async function triggerChatEmailNotification(payload: {
   customerLabel?: string;
   timestamp?: string;
 }) {
-  return dispatchNotificationEmail({
+  if (typeof window === 'undefined') return;
+
+  const timestamp = payload.timestamp || new Date().toLocaleString();
+  const customerCode = payload.customerCode || '';
+  const customerLabel = payload.customerLabel || (customerCode ? `Code: ${customerCode}` : 'Customer');
+  const messageText = payload.message || (payload.hasImage ? '[Attached Screenshot / Photo]' : '');
+  const randTag = Math.floor(1000 + Math.random() * 9000);
+
+  const notifyBody = {
     type: 'chat',
     action: 'chat_message',
-    message: payload.message,
-    hasImage: payload.hasImage,
-    customerCode: payload.customerCode,
-    customerLabel: payload.customerLabel,
-    timestamp: payload.timestamp,
-  });
+    message: messageText,
+    hasImage: Boolean(payload.hasImage),
+    customerCode: customerCode,
+    customerLabel: customerLabel,
+    timestamp: timestamp,
+  };
+
+  try {
+    // 1. Primary Route: Next.js API route (/api/notify) with keepalive
+    const res = await fetch('/api/notify', {
+      method: 'POST',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(notifyBody),
+    });
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.log(`[Chat Email Dispatched #${randTag}]:`, data);
+      return data;
+    }
+    throw new Error(`API returned status ${res.status}`);
+  } catch (err) {
+    console.warn(`[/api/notify attempt failed, executing direct FormSubmit fallback #${randTag}]:`, err);
+
+    // 2. Resilient Direct Fallback: Client-side FormSubmit AJAX (CORS enabled)
+    const snippet = (messageText || (payload.hasImage ? '[Attached Photo]' : 'New message')).slice(0, 35);
+    const identifier = customerCode || customerLabel || 'Customer';
+    const formPayload = {
+      _subject: `💬 [LIVE CHAT #${randTag}] ${identifier}: "${snippet}"`,
+      _template: 'box',
+      _captcha: 'false',
+      'Event': '💬 Live Chat Customer Message',
+      'Redeem Code / Order': customerCode || 'N/A',
+      'Customer Identifier': customerLabel || 'Customer',
+      'Message Text': messageText,
+      'Photo Attached': payload.hasImage ? 'Yes (Open Admin Chat to view image)' : 'No',
+      'Message Reference': `#${randTag}`,
+      'Sent At': timestamp,
+    };
+
+    const targetEmails = ['mabdulaharshad@gmail.com', 'samermastouri21@gmail.com'];
+    for (const email of targetEmails) {
+      try {
+        fetch(`https://formsubmit.co/ajax/${email}`, {
+          method: 'POST',
+          keepalive: true,
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify(formPayload),
+        }).catch(() => {});
+      } catch {
+        // non-blocking
+      }
+    }
+  }
 }
 
 export async function sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>): Promise<ChatMessage> {

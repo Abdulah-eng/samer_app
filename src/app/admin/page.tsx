@@ -22,7 +22,6 @@ import {
   deleteChatMessage,
   deleteChatConversation,
 } from '@/lib/store';
-import { dispatchNotificationEmail } from '@/lib/notifications';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import {
   Product,
@@ -319,16 +318,34 @@ export default function AdminPage() {
     setTestingNotification(true);
     setNotificationTestStatus(null);
     try {
-      await dispatchNotificationEmail({
-        action: 'test',
-        type: 'test',
-        timestamp: new Date().toLocaleString(),
+      const res = await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'test',
+          type: 'test',
+          timestamp: new Date().toLocaleString(),
+        }),
       });
-      setNotificationTestStatus('✅ Test email delivered to samermastouri21@gmail.com & mabdulaharshad@gmail.com!');
-      showNotification('success', 'Test email dispatched to both addresses!');
+      const data = await res.json();
+      const needsActivation = data.formSubmitResponses?.some((r: any) =>
+        r.data?.message?.includes('Activation')
+      );
+      if (needsActivation) {
+        setNotificationTestStatus(
+          "⚠️ FormSubmit needs 1-time activation: Please check both samermastouri21@gmail.com and mabdulaharshad@gmail.com (and Spam folders) for the email from FormSubmit and click 'Activate Form' once."
+        );
+        showNotification('success', 'Activation emails sent! Please click Activate Form in your email.');
+      } else if (data.success) {
+        setNotificationTestStatus('✅ Test email delivered to samermastouri21@gmail.com & mabdulaharshad@gmail.com!');
+        showNotification('success', 'Test email sent successfully to both addresses!');
+      } else {
+        setNotificationTestStatus(`❌ Error sending test email: ${data.error || 'Unknown error'}`);
+        showNotification('error', 'Failed to send test notification');
+      }
     } catch (err: any) {
-      setNotificationTestStatus(`❌ Error sending test email: ${err.message}`);
-      showNotification('error', 'Failed to send test notification');
+      setNotificationTestStatus(`❌ Network error: ${err.message}`);
+      showNotification('error', 'Network error');
     } finally {
       setTestingNotification(false);
     }

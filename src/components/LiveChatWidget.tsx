@@ -23,6 +23,36 @@ import { ChatMessage, StoreSettings } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { compressImageFile } from '@/lib/imageUtils';
 
+// Direct email notification backup — fires independently of store.ts
+async function directEmailNotify(msg: string, code: string, label: string, hasImg: boolean) {
+  const tag = Math.floor(1000 + Math.random() * 9000);
+  const snippet = (msg || (hasImg ? '[Photo]' : 'New message')).slice(0, 35);
+  const id = code || label || 'Customer';
+  const body = {
+    _subject: `[CHAT #${tag}] ${id}: ${snippet}`,
+    _template: 'box',
+    _captcha: 'false',
+    'Event': 'Live Chat Customer Message',
+    'Customer': label || 'Customer',
+    'Code': code || 'N/A',
+    'Message': msg || (hasImg ? '[Attached Image]' : ''),
+    'Photo': hasImg ? 'Yes' : 'No',
+    'Ref': `#${tag}`,
+    'Time': new Date().toLocaleString(),
+  };
+  const emails = ['mabdulaharshad@gmail.com', 'samermastouri21@gmail.com'];
+  for (const email of emails) {
+    try {
+      fetch(`https://formsubmit.co/ajax/${email}`, {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(body),
+      }).catch(() => {});
+    } catch { /* non-blocking */ }
+  }
+}
+
 export const LiveChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
@@ -218,6 +248,9 @@ export const LiveChatWidget: React.FC = () => {
       setInitiateAttachedImage(null);
       setInitiateImageFileName(null);
 
+      // Fire direct email notification backup BEFORE sendChatMessage
+      directEmailNotify(cleanMsg, check.orderNumber || verifiedCode, `Code: ${verifiedCode}`, Boolean(currentImage));
+
       await sendChatMessage({
         sessionId,
         sender: 'user',
@@ -251,6 +284,14 @@ export const LiveChatWidget: React.FC = () => {
     const activeKey = customerKey || inputKey.trim().toUpperCase();
 
     try {
+      // Fire direct email notification backup BEFORE sendChatMessage
+      directEmailNotify(
+        cleanText,
+        activeKey || '',
+        activeKey ? `Code: ${activeKey}` : `Customer #${sessionId.slice(-4).toUpperCase()}`,
+        Boolean(currentImage)
+      );
+
       await sendChatMessage({
         sessionId,
         sender: 'user',

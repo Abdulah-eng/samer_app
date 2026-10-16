@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { TermsModal } from '@/components/TermsModal';
-import { getStoreSettings, verifyAndRedeemCode } from '@/lib/store';
+import { getStoreSettings, verifyAndRedeemCode, updateOrderNotificationEmail } from '@/lib/store';
 import { StoreSettings, Order } from '@/lib/types';
 import {
   KeyRound,
@@ -33,6 +33,7 @@ import {
   Key,
   Coins,
   Mail,
+  Check,
 } from 'lucide-react';
 
 const HOME_FAQS = [
@@ -78,13 +79,19 @@ export default function HomePage() {
   });
 
   const [code, setCode] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [redeemedOrder, setRedeemedOrder] = useState<Order | null>(null);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+
+  // Post-redemption email state (strictly collected AFTER buyer redeems code, complying with marketplaces)
+  const [afterRedeemEmail, setAfterRedeemEmail] = useState('');
+  const [savingAfterRedeemEmail, setSavingAfterRedeemEmail] = useState(false);
+  const [afterRedeemSuccess, setAfterRedeemSuccess] = useState('');
+  const [afterRedeemError, setAfterRedeemError] = useState('');
+  const [isEditingAfterRedeemEmail, setIsEditingAfterRedeemEmail] = useState(false);
 
   useEffect(() => {
     getStoreSettings().then(setSettings);
@@ -98,10 +105,6 @@ export default function HomePage() {
       setErrorMsg('Please enter your redeem code.');
       return;
     }
-    if (customerEmail.trim() && !customerEmail.includes('@')) {
-      setErrorMsg('Please enter a valid email address.');
-      return;
-    }
     if (!acceptedTerms) {
       setErrorMsg('You must accept the Terms & Conditions to proceed.');
       return;
@@ -109,15 +112,18 @@ export default function HomePage() {
 
     setLoading(true);
     try {
-      const result = await verifyAndRedeemCode(code, customerEmail);
+      const result = await verifyAndRedeemCode(code);
       if (!result.success) {
         setErrorMsg(result.message);
       } else if (result.order) {
         if (result.isTopUp || result.order.deliveryType === 'topup') {
-          const emailQuery = customerEmail.trim() ? `&email=${encodeURIComponent(customerEmail.trim())}` : '';
-          router.push(`/topup?code=${encodeURIComponent(result.order.code)}${emailQuery}`);
+          router.push(`/topup?code=${encodeURIComponent(result.order.code)}`);
         } else {
           setRedeemedOrder(result.order);
+          setAfterRedeemEmail(result.order.customerEmail || '');
+          setAfterRedeemSuccess('');
+          setAfterRedeemError('');
+          setIsEditingAfterRedeemEmail(false);
         }
       }
     } catch (err: unknown) {
@@ -125,6 +131,32 @@ export default function HomePage() {
       setErrorMsg(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveAfterRedeemEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!redeemedOrder) return;
+    setAfterRedeemError('');
+    setAfterRedeemSuccess('');
+
+    const emailTrim = afterRedeemEmail.trim();
+    if (!emailTrim || !emailTrim.includes('@') || !emailTrim.includes('.')) {
+      setAfterRedeemError('Please enter a valid email address.');
+      return;
+    }
+
+    setSavingAfterRedeemEmail(true);
+    try {
+      const updated = await updateOrderNotificationEmail(redeemedOrder.id, emailTrim);
+      setRedeemedOrder(updated);
+      setAfterRedeemSuccess('Email notification activated! We will email you once your order is ready.');
+      setIsEditingAfterRedeemEmail(false);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save email address.';
+      setAfterRedeemError(msg);
+    } finally {
+      setSavingAfterRedeemEmail(false);
     }
   };
 
@@ -265,31 +297,6 @@ export default function HomePage() {
                     />
                   </div>
 
-                  {/* Email input for notification when order ready (Accounts & Keys) */}
-                  <div className="space-y-1.5 pt-0.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
-                        <Mail className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>Email for Notification</span>
-                      </label>
-                      <span className="text-[10px] text-cyan-400/80 font-medium">For Accounts & Keys</span>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="email"
-                        value={customerEmail}
-                        onChange={(e) => { setCustomerEmail(e.target.value); setErrorMsg(''); }}
-                        placeholder="your-email@example.com"
-                        className="w-full bg-[#07101e] border border-gray-700 hover:border-gray-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 rounded-xl py-2.5 px-3.5 text-xs sm:text-sm text-gray-200 placeholder-gray-500 outline-none transition-all font-sans"
-                        disabled={loading}
-                      />
-                    </div>
-                    <p className="text-[11px] text-gray-400 leading-tight flex items-start gap-1.5 pl-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0 mt-1" />
-                      <span>We’ll send an email notification as soon as your account or key is ready.</span>
-                    </p>
-                  </div>
-
                   {errorMsg && (
                     <div className="flex items-start gap-2 bg-red-900/30 border border-red-500/40 text-red-300 text-xs p-3 rounded-xl">
                       <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
@@ -401,12 +408,88 @@ export default function HomePage() {
                       </span>
                     </div>
                   </div>
-                  {redeemedOrder.customerEmail && (
-                    <div className="text-[11px] text-cyan-300/90 bg-cyan-950/30 border border-cyan-800/40 rounded-xl p-2.5 flex items-center justify-center gap-1.5">
-                      <Mail className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                      <span>We’ll email you once your credentials are ready!</span>
-                    </div>
-                  )}
+
+                  {/* Post-Redeem Email Notification (Optional - For Accounts & Keys) */}
+                  <div className="text-left">
+                    {redeemedOrder.customerEmail && !isEditingAfterRedeemEmail ? (
+                      <div className="bg-[#091527] border border-cyan-500/40 rounded-xl p-3.5 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-cyan-400 font-bold text-xs uppercase tracking-wider">
+                            <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>Email Notification Active</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsEditingAfterRedeemEmail(true);
+                              setAfterRedeemEmail(redeemedOrder.customerEmail || '');
+                              setAfterRedeemSuccess('');
+                              setAfterRedeemError('');
+                            }}
+                            className="text-[11px] text-gray-400 hover:text-white underline cursor-pointer"
+                          >
+                            Change
+                          </button>
+                        </div>
+                        <div className="font-mono text-cyan-200 text-xs font-semibold select-all truncate">
+                          {redeemedOrder.customerEmail}
+                        </div>
+                        <p className="text-[11px] text-gray-400 leading-tight">
+                          We will email your product credentials or key to this address as soon as it is fulfilled.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="bg-[#091527] border border-cyan-500/30 hover:border-cyan-500/50 rounded-xl p-3.5 space-y-2.5 transition">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
+                            <Mail className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h5 className="text-xs font-bold text-white uppercase tracking-wider">
+                              Get Email Alert When Ready <span className="text-[10px] text-gray-400 lowercase font-normal">(optional)</span>
+                            </h5>
+                            <p className="text-[11px] text-gray-400 leading-tight">
+                              Add your email to receive your account or key as soon as it&apos;s ready.
+                            </p>
+                          </div>
+                        </div>
+                        <form onSubmit={handleSaveAfterRedeemEmail} className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="email"
+                            value={afterRedeemEmail}
+                            onChange={(e) => {
+                              setAfterRedeemEmail(e.target.value);
+                              setAfterRedeemError('');
+                            }}
+                            placeholder="your-email@example.com"
+                            className="flex-1 bg-[#050b14] border border-gray-700 focus:border-cyan-400 rounded-xl py-2 px-3 text-xs text-gray-200 placeholder-gray-500 outline-none font-sans"
+                            disabled={savingAfterRedeemEmail}
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="submit"
+                              disabled={savingAfterRedeemEmail}
+                              className="py-2 px-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-gray-950 font-bold text-xs uppercase tracking-wider shrink-0 transition cursor-pointer disabled:opacity-60"
+                            >
+                              {savingAfterRedeemEmail ? 'Saving...' : 'Save Email'}
+                            </button>
+                            {isEditingAfterRedeemEmail && (
+                              <button
+                                type="button"
+                                onClick={() => setIsEditingAfterRedeemEmail(false)}
+                                className="py-2 px-3 rounded-xl bg-gray-800 text-gray-400 hover:text-white text-xs cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            )}
+                          </div>
+                        </form>
+                        {afterRedeemError && <p className="text-[11px] text-rose-400 font-medium">{afterRedeemError}</p>}
+                        {afterRedeemSuccess && <p className="text-[11px] text-emerald-400 font-medium">{afterRedeemSuccess}</p>}
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     onClick={() => router.push(`/status?code=${encodeURIComponent(redeemedOrder.code)}`)}
                     className="w-full py-3 rounded-xl font-black text-xs uppercase tracking-wider text-gray-900 transition"
@@ -415,7 +498,15 @@ export default function HomePage() {
                     View Delivery Status
                   </button>
                   <button
-                    onClick={() => { setRedeemedOrder(null); setCode(''); setCustomerEmail(''); setAcceptedTerms(false); }}
+                    onClick={() => {
+                      setRedeemedOrder(null);
+                      setCode('');
+                      setAcceptedTerms(false);
+                      setAfterRedeemEmail('');
+                      setAfterRedeemSuccess('');
+                      setAfterRedeemError('');
+                      setIsEditingAfterRedeemEmail(false);
+                    }}
                     className="text-xs text-gray-500 hover:text-gray-300 transition"
                   >
                     Redeem another code

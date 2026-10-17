@@ -414,21 +414,6 @@ function TopUpContent() {
                 </div>
               </div>
 
-              {/* Supported Platforms Banner */}
-              <div className="rounded-xl overflow-hidden border border-gray-800 bg-[#040810] p-2.5 space-y-1.5">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-[11px] font-semibold text-gray-400">
-                    Platform Account (Email of the platform account you use):
-                  </span>
-                </div>
-                <div className="w-full rounded-lg overflow-hidden border border-gray-800/80 bg-black/40 p-1 flex items-center justify-center">
-                  <img
-                    src="/platform-logos.png"
-                    alt="Supported Platforms"
-                    className="w-full max-h-14 sm:max-h-16 object-contain"
-                  />
-                </div>
-              </div>
 
               {/* Row 2: Account Email & Password */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

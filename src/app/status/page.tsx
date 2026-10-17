@@ -98,11 +98,7 @@ function OrderStatusContent() {
         setFormAccountPassword(data.topUpAccountPassword || '');
         setFormNotes(data.topUpNotes || '');
         // If it's a top-up product and customer has NOT submitted email yet, show the form!
-        const isTopUp =
-          data.deliveryType === 'topup' ||
-          (data.productName || '').toLowerCase().includes('top') ||
-          (data.productName || '').toLowerCase().includes('v-bucks') ||
-          (data.productName || '').toLowerCase().includes('coins');
+        const isTopUp = data.deliveryType === 'topup';
 
         if (isTopUp && !data.topUpAccountEmail) {
           setIsEditingTopUp(true);
@@ -218,17 +214,8 @@ function OrderStatusContent() {
     if (chatBtn) chatBtn.click();
   };
 
-  // Robust check to determine if this order is a Top-Up Service
-  const isTopUpOrder = Boolean(
-    order &&
-      (order.deliveryType === 'topup' ||
-        (order.productName || '').toLowerCase().includes('top') ||
-        (order.productName || '').toLowerCase().includes('v-bucks') ||
-        (order.productName || '').toLowerCase().includes('coins') ||
-        (order.productName || '').toLowerCase().includes('points') ||
-        order.topUpAccountEmail ||
-        order.topUpOrderNumber)
-  );
+  // Order delivery type strictly follows order.deliveryType (account, key, or topup)
+  const isTopUpOrder = Boolean(order && order.deliveryType === 'topup');
 
   return (
     <div className="min-h-screen flex flex-col bg-[#060a12] text-gray-100 font-sans selection:bg-amber-400 selection:text-black">
@@ -475,19 +462,6 @@ function OrderStatusContent() {
                         </div>
                       </div>
 
-                      {/* Supported Platforms Banner */}
-                      <div className="rounded-xl overflow-hidden border border-gray-800 bg-[#040810] p-2 sm:p-2.5 space-y-1">
-                        <span className="text-[11px] font-semibold text-gray-400 px-1 block">
-                          Platform Account (Email of the platform account you use):
-                        </span>
-                        <div className="w-full rounded-lg overflow-hidden border border-gray-800/80 bg-black/40 p-1 flex items-center justify-center">
-                          <img
-                            src="/platform-logos.png"
-                            alt="Supported Platforms"
-                            className="w-full max-h-12 sm:max-h-14 object-contain"
-                          />
-                        </div>
-                      </div>
 
                       {/* Row 2: Account Email & Password */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

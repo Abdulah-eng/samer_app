@@ -354,13 +354,7 @@ export default function AdminPage() {
   // Fulfill Order Action
   const openFulfillModal = (orderItem: Order) => {
     setEditingOrder(orderItem);
-    const dType =
-      orderItem.deliveryType ||
-      (orderItem.productName?.toLowerCase().includes('top')
-        ? 'topup'
-        : orderItem.productName?.toLowerCase().includes('key')
-        ? 'key'
-        : 'account');
+    const dType: DeliveryType = orderItem.deliveryType || 'account';
     setDeliveryType(dType);
     setAccountEmail(orderItem.accountEmail || '');
     setAccountPassword(orderItem.accountPassword || '');
@@ -394,7 +388,7 @@ export default function AdminPage() {
         productKey: deliveryType === 'key' ? productKey : undefined,
         topUpOrderNumber: deliveryType === 'topup' ? editingOrder.topUpOrderNumber : undefined,
         topUpPlatform: deliveryType === 'topup' ? editingOrder.topUpPlatform : undefined,
-        topUpAccountEmail: deliveryType === 'topup' ? editingOrder.topUpAccountEmail : finalNotifEmail,
+        topUpAccountEmail: deliveryType === 'topup' ? (editingOrder.topUpAccountEmail || finalNotifEmail) : undefined,
         topUpAccountPassword: deliveryType === 'topup' ? editingOrder.topUpAccountPassword : undefined,
         topUpNotes: deliveryType === 'topup' ? editingOrder.topUpNotes : undefined,
         instructions,
@@ -741,6 +735,7 @@ export default function AdminPage() {
         o.orderNumber.toLowerCase().includes(q) ||
         o.code.toLowerCase().includes(q) ||
         o.productName.toLowerCase().includes(q) ||
+        (o.customerEmail && o.customerEmail.toLowerCase().includes(q)) ||
         (o.topUpOrderNumber && o.topUpOrderNumber.toLowerCase().includes(q)) ||
         (o.topUpAccountEmail && o.topUpAccountEmail.toLowerCase().includes(q))
       );

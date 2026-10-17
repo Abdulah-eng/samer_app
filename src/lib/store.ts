@@ -440,20 +440,8 @@ export async function verifyAndRedeemCode(
     };
   }
 
-  // Determine delivery type
-  let determinedDeliveryType: DeliveryType = foundCode.deliveryType || 'account';
-  const pName = (foundCode.productName || '').toLowerCase();
-  if (
-    pName.includes('top up') ||
-    pName.includes('top-up') ||
-    pName.includes('v-bucks') ||
-    pName.includes('coins') ||
-    pName.includes('points')
-  ) {
-    determinedDeliveryType = 'topup';
-  } else if (!foundCode.deliveryType && (pName.includes('key') || pName.includes('code'))) {
-    determinedDeliveryType = 'key';
-  }
+  // Delivery type strictly follows the redeem code configuration created by admin
+  const determinedDeliveryType: DeliveryType = foundCode.deliveryType || 'account';
 
   // Find product photo if available
   let prodImg: string | undefined = undefined;
@@ -481,7 +469,7 @@ export async function verifyAndRedeemCode(
     status: 'processing',
     deliveryType: determinedDeliveryType,
     customerEmail: cleanCustomerEmail,
-    topUpAccountEmail: cleanCustomerEmail,
+    topUpAccountEmail: determinedDeliveryType === 'topup' ? cleanCustomerEmail : undefined,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -493,7 +481,7 @@ export async function verifyAndRedeemCode(
   if (isSupabaseConfigured && supabase) {
     await supabase.from('redeem_codes').update({ status: 'processing', used_at: foundCode.usedAt }).eq('code', cleanCode);
     
-    // Store in Supabase (using top_up_account_email as universal fallback for customer email)
+    // Store in Supabase
     const basePayload: any = {
       order_number: orderNumber,
       code: cleanCode,
@@ -501,7 +489,7 @@ export async function verifyAndRedeemCode(
       product_name: newOrder.productName,
       status: 'processing',
       delivery_type: determinedDeliveryType,
-      top_up_account_email: cleanCustomerEmail || null,
+      top_up_account_email: determinedDeliveryType === 'topup' ? (cleanCustomerEmail || null) : null,
     };
 
     try {
@@ -627,24 +615,7 @@ export async function getOrders(): Promise<Order[]> {
     const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
     if (!error && data) {
       return data.map((item) => {
-        let dType: DeliveryType = (item.delivery_type as DeliveryType) || 'account';
-        const pLower = (item.product_name || '').toLowerCase();
-        if (
-          dType === 'topup' ||
-          pLower.includes('top up') ||
-          pLower.includes('top-up') ||
-          pLower.includes('v-bucks') ||
-          pLower.includes('coins') ||
-          pLower.includes('points') ||
-          item.top_up_account_email ||
-          item.top_up_order_number
-        ) {
-          dType = 'topup';
-        } else if (dType !== 'account' || pLower.includes('key') || pLower.includes('code')) {
-          if (item.product_key || pLower.includes('key')) {
-            dType = 'key';
-          }
-        }
+        const dType: DeliveryType = (item.delivery_type as DeliveryType) || 'account';
 
         return {
           id: item.id,
@@ -658,13 +629,13 @@ export async function getOrders(): Promise<Order[]> {
           accountPassword: item.account_password,
           twoFactorKey: item.two_factor_key,
           productKey: item.product_key,
-          customerEmail: item.customer_email || item.top_up_account_email || undefined,
-          topUpOrderNumber: item.top_up_order_number,
-          topUpPlatform: item.top_up_platform,
-          topUpAccountEmail: item.top_up_account_email,
-          topUpAccountPassword: item.top_up_account_password,
-          topUpNotes: item.top_up_notes,
-          topUpSubmittedAt: item.top_up_submitted_at,
+          customerEmail: item.customer_email || (dType === 'topup' ? item.top_up_account_email : undefined) || undefined,
+          topUpOrderNumber: dType === 'topup' ? item.top_up_order_number : undefined,
+          topUpPlatform: dType === 'topup' ? item.top_up_platform : undefined,
+          topUpAccountEmail: dType === 'topup' ? item.top_up_account_email : undefined,
+          topUpAccountPassword: dType === 'topup' ? item.top_up_account_password : undefined,
+          topUpNotes: dType === 'topup' ? item.top_up_notes : undefined,
+          topUpSubmittedAt: dType === 'topup' ? item.top_up_submitted_at : undefined,
           instructions: item.instructions,
           customerIp: item.customer_ip,
           createdAt: item.created_at,
@@ -676,22 +647,14 @@ export async function getOrders(): Promise<Order[]> {
 
   const localOrders = getLocal<Order[]>(STORAGE_KEYS.ORDERS, INITIAL_ORDERS);
   return localOrders.map((o) => {
-    let dType = o.deliveryType || 'account';
-    const pLower = (o.productName || '').toLowerCase();
-    if (
-      dType === 'topup' ||
-      pLower.includes('top up') ||
-      pLower.includes('top-up') ||
-      pLower.includes('v-bucks') ||
-      pLower.includes('coins') ||
-      o.topUpOrderNumber
-    ) {
-      dType = 'topup';
-    }
+    const dType: DeliveryType = o.deliveryType || 'account';
     return {
       ...o,
       deliveryType: dType,
-      customerEmail: o.customerEmail || o.topUpAccountEmail || undefined,
+      customerEmail: o.customerEmail || (dType === 'topup' ? o.topUpAccountEmail : undefined) || undefined,
+      topUpOrderNumber: dType === 'topup' ? o.topUpOrderNumber : undefined,
+      topUpPlatform: dType === 'topup' ? o.topUpPlatform : undefined,
+      topUpAccountEmail: dType === 'topup' ? o.topUpAccountEmail : undefined,
     };
   });
 }
@@ -740,18 +703,22 @@ export async function updateOrderNotificationEmail(orderIdOrCode: string, email:
   const updatedOrder: Order = {
     ...existing,
     customerEmail: cleanEmail,
-    topUpAccountEmail: cleanEmail,
+    topUpAccountEmail: existing.deliveryType === 'topup' ? cleanEmail : existing.topUpAccountEmail,
     updatedAt: new Date().toISOString(),
   };
 
   if (isSupabaseConfigured && supabase) {
     try {
+      const payload: any = {
+        customer_email: cleanEmail,
+        updated_at: updatedOrder.updatedAt,
+      };
+      if (existing.deliveryType === 'topup') {
+        payload.top_up_account_email = cleanEmail;
+      }
       await supabase
         .from('orders')
-        .update({
-          top_up_account_email: cleanEmail,
-          updated_at: updatedOrder.updatedAt,
-        })
+        .update(payload)
         .eq('id', existing.id);
     } catch (e) {
       console.warn('Supabase updateOrderNotificationEmail warning', e);
@@ -881,13 +848,22 @@ export async function updateOrderDelivery(
   }
 
   const existing = orders[orderIndex];
-  const finalCustomerEmail = deliveryData.customerEmail || deliveryData.topUpAccountEmail || existing.customerEmail || existing.topUpAccountEmail;
+  const resolvedDeliveryType = deliveryData.deliveryType || existing.deliveryType || 'account';
+  const finalCustomerEmail =
+    deliveryData.customerEmail ||
+    existing.customerEmail ||
+    (resolvedDeliveryType === 'topup' ? (deliveryData.topUpAccountEmail || existing.topUpAccountEmail) : undefined);
 
   const updatedOrder: Order = {
     ...existing,
     ...deliveryData,
+    deliveryType: resolvedDeliveryType,
     customerEmail: finalCustomerEmail,
-    topUpAccountEmail: finalCustomerEmail,
+    topUpAccountEmail: resolvedDeliveryType === 'topup' ? (deliveryData.topUpAccountEmail || existing.topUpAccountEmail || finalCustomerEmail) : undefined,
+    topUpOrderNumber: resolvedDeliveryType === 'topup' ? (deliveryData.topUpOrderNumber || existing.topUpOrderNumber) : undefined,
+    topUpPlatform: resolvedDeliveryType === 'topup' ? (deliveryData.topUpPlatform || existing.topUpPlatform) : undefined,
+    topUpAccountPassword: resolvedDeliveryType === 'topup' ? (deliveryData.topUpAccountPassword || existing.topUpAccountPassword) : undefined,
+    topUpNotes: resolvedDeliveryType === 'topup' ? (deliveryData.topUpNotes || existing.topUpNotes) : undefined,
     updatedAt: new Date().toISOString(),
   };
 
@@ -908,16 +884,17 @@ export async function updateOrderDelivery(
     await supabase
       .from('orders')
       .update({
-        delivery_type: deliveryData.deliveryType || existing.deliveryType || 'account',
-        account_email: deliveryData.accountEmail,
-        account_password: deliveryData.accountPassword,
-        two_factor_key: deliveryData.twoFactorKey,
-        product_key: deliveryData.productKey,
-        top_up_order_number: deliveryData.topUpOrderNumber,
-        top_up_platform: deliveryData.topUpPlatform,
-        top_up_account_email: finalCustomerEmail,
-        top_up_account_password: deliveryData.topUpAccountPassword,
-        top_up_notes: deliveryData.topUpNotes,
+        delivery_type: resolvedDeliveryType,
+        account_email: resolvedDeliveryType === 'account' ? (deliveryData.accountEmail || null) : null,
+        account_password: resolvedDeliveryType === 'account' ? (deliveryData.accountPassword || null) : null,
+        two_factor_key: resolvedDeliveryType === 'account' ? (deliveryData.twoFactorKey || null) : null,
+        product_key: resolvedDeliveryType === 'key' ? (deliveryData.productKey || null) : null,
+        top_up_order_number: resolvedDeliveryType === 'topup' ? (deliveryData.topUpOrderNumber || null) : null,
+        top_up_platform: resolvedDeliveryType === 'topup' ? (deliveryData.topUpPlatform || null) : null,
+        top_up_account_email: resolvedDeliveryType === 'topup' ? (deliveryData.topUpAccountEmail || finalCustomerEmail || null) : null,
+        top_up_account_password: resolvedDeliveryType === 'topup' ? (deliveryData.topUpAccountPassword || null) : null,
+        top_up_notes: resolvedDeliveryType === 'topup' ? (deliveryData.topUpNotes || null) : null,
+        customer_email: finalCustomerEmail || null,
         instructions: deliveryData.instructions,
         status: deliveryData.status,
         updated_at: updatedOrder.updatedAt,

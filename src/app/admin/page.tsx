@@ -205,8 +205,11 @@ export default function AdminPage() {
       });
     };
 
-    // Cross-device Auto-polling (every 2.5s) to receive messages from mobile or outside devices instantly
+    // Cross-device Auto-polling (every 10s fallback, Realtime channel provides instant sync)
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return; // Don't burn mobile bandwidth/battery when tab is in background
+      }
       if (localStorage.getItem('admin_authenticated') === 'true') {
         getChatMessages().then((latest) => {
           setChatMessages((prev) => {
@@ -223,7 +226,7 @@ export default function AdminPage() {
           });
         });
       }
-    }, 2500);
+    }, 10000);
 
     // Supabase Realtime channel for instant cross-device updates
     let channel: any = null;
@@ -488,16 +491,16 @@ export default function AdminPage() {
     }
   };
 
-  // Add Single Code
+  // Add Single Code (Instant optimistic update without heavy reload)
   const handleAddSingleCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!singleCodeInput.trim() || !selectedProductId) return;
 
     try {
-      await addRedeemCode(singleCodeInput, selectedProductId, codeDeliveryType);
+      const newCode = await addRedeemCode(singleCodeInput, selectedProductId, codeDeliveryType);
+      setCodes((prev) => [newCode, ...prev]);
       setSingleCodeInput('');
       showNotification('success', `Redeem code added for ${codeDeliveryType} delivery!`);
-      loadAllData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error adding code';
       showNotification('error', msg);
@@ -521,7 +524,8 @@ export default function AdminPage() {
         'success',
         `Batch generated ${res.added} ${codeDeliveryType.toUpperCase()} codes (${res.skipped} skipped duplicates).`
       );
-      loadAllData();
+      // Fast refresh of codes only without reloading heavy products/chats
+      getRedeemCodes().then(setCodes);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error batch generating';
       showNotification('error', msg);
@@ -547,7 +551,7 @@ export default function AdminPage() {
           'success',
           `CSV Import complete! Added ${res.added} ${codeDeliveryType.toUpperCase()} codes (${res.skipped} skipped).`
         );
-        loadAllData();
+        getRedeemCodes().then(setCodes);
       },
       error: () => showNotification('error', 'Error parsing CSV file.'),
     });
@@ -1524,7 +1528,7 @@ export default function AdminPage() {
                         <button
                           onClick={async () => {
                             await deleteRedeemCode(c.id);
-                            loadAllData();
+                            setCodes((prev) => prev.filter((item) => item.id !== c.id));
                           }}
                           className="p-1 text-gray-500 hover:text-rose-400 transition cursor-pointer"
                         >

@@ -109,18 +109,41 @@ function setLocal<T>(key: string, value: T): void {
   }
 }
 
-// ---------------- PRODUCTS SERVICE ----------------
-export async function getProducts(): Promise<Product[]> {
+// In-memory products cache to prevent massive re-downloads (products contain base64 imagery)
+let cachedProducts: Product[] | null = null;
+let cachedProductsTimestamp = 0;
+const PRODUCTS_CACHE_TTL = 120 * 1000; // 2 minutes
+
+export function invalidateProductsCache() {
+  cachedProducts = null;
+  cachedProductsTimestamp = 0;
+}
+
+export async function getProducts(forceRefresh: boolean = false): Promise<Product[]> {
+  if (!forceRefresh && cachedProducts && (Date.now() - cachedProductsTimestamp < PRODUCTS_CACHE_TTL)) {
+    return cachedProducts;
+  }
+
   const mapProduct = (item: any): Product => {
     let description = item.description || '';
     let imageUrl = item.image_url || item.imageUrl || undefined;
-    if (!imageUrl && description.includes('[IMAGE:')) {
-      const match = description.match(/\[IMAGE:([\s\S]*?)\]/);
-      if (match) {
-        imageUrl = match[1];
-        description = description.replace(match[0], '').trim();
+
+    // Fast non-regex parsing for [IMAGE:...] to eliminate regex backtracking overhead on large base64 strings
+    if (!imageUrl && description.startsWith('[IMAGE:')) {
+      const closingIdx = description.indexOf(']');
+      if (closingIdx !== -1) {
+        imageUrl = description.substring(7, closingIdx);
+        description = description.substring(closingIdx + 1).trim();
+      }
+    } else if (!imageUrl && description.includes('[IMAGE:')) {
+      const startIdx = description.indexOf('[IMAGE:');
+      const closingIdx = description.indexOf(']', startIdx);
+      if (closingIdx !== -1) {
+        imageUrl = description.substring(startIdx + 7, closingIdx);
+        description = (description.substring(0, startIdx) + description.substring(closingIdx + 1)).trim();
       }
     }
+
     return {
       id: item.id,
       name: item.name,
@@ -135,12 +158,18 @@ export async function getProducts(): Promise<Product[]> {
   if (isSupabaseConfigured && supabase) {
     const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
     if (!error && data) {
-      return data.map(mapProduct);
+      const res = data.map(mapProduct);
+      cachedProducts = res;
+      cachedProductsTimestamp = Date.now();
+      return res;
     }
   }
 
   const local = getLocal<Product[]>(STORAGE_KEYS.PRODUCTS, INITIAL_PRODUCTS);
-  return local.map(mapProduct);
+  const res = local.map(mapProduct);
+  cachedProducts = res;
+  cachedProductsTimestamp = Date.now();
+  return res;
 }
 
 export async function addProduct(product: Omit<Product, 'id' | 'createdAt'>): Promise<Product> {
@@ -228,11 +257,13 @@ export async function updateProduct(
   }
 
   products[existingIndex] = updatedProduct;
+  invalidateProductsCache();
   setLocal(STORAGE_KEYS.PRODUCTS, products);
   return updatedProduct;
 }
 
 export async function deleteProduct(id: string): Promise<boolean> {
+  invalidateProductsCache();
   if (isSupabaseConfigured && supabase) {
     const { error } = await supabase.from('products').delete().eq('id', id);
     if (error) {
@@ -304,7 +335,7 @@ export async function addRedeemCode(
         delivery_type: resolvedDeliveryType,
         status: 'unused',
       })
-      .select()
+      .select('*, products(name)')
       .single();
 
     if (!error && data) {
@@ -312,11 +343,18 @@ export async function addRedeemCode(
         id: data.id,
         code: data.code,
         productId: data.product_id,
-        productName: product?.name || 'Digital Product',
+        productName: data.products?.name || product?.name || 'Digital Product',
         deliveryType: data.delivery_type || resolvedDeliveryType,
         status: data.status,
         createdAt: data.created_at,
       };
+    }
+
+    if (error) {
+      if (error.code === '23505') {
+        throw new Error(`Code '${cleanCode}' already exists in database.`);
+      }
+      throw new Error(`Database error adding code: ${error.message}`);
     }
   }
 
@@ -933,10 +971,11 @@ export async function getChatMessages(sessionId?: string): Promise<ChatMessage[]
     let rawText = d.text || '';
     let imageUrl = d.image_url || undefined;
     if (!imageUrl && rawText.includes('[IMAGE_ATTACHMENT:')) {
-      const match = rawText.match(/\[IMAGE_ATTACHMENT:([\s\S]*?)\]/);
-      if (match) {
-        imageUrl = match[1];
-        rawText = rawText.replace(match[0], '').trim();
+      const startIdx = rawText.indexOf('[IMAGE_ATTACHMENT:');
+      const closingIdx = rawText.indexOf(']', startIdx);
+      if (closingIdx !== -1) {
+        imageUrl = rawText.substring(startIdx + 18, closingIdx);
+        rawText = (rawText.substring(0, startIdx) + rawText.substring(closingIdx + 1)).trim();
       }
     }
 
@@ -954,18 +993,20 @@ export async function getChatMessages(sessionId?: string): Promise<ChatMessage[]
 
   if (isSupabaseConfigured && supabase) {
     try {
-      let query = supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
+      let query = supabase.from('chat_messages').select('*').order('created_at', { ascending: false });
       if (sessionId) {
-        query = query.eq('session_id', sessionId);
+        query = query.eq('session_id', sessionId).limit(60);
+      } else {
+        query = query.limit(100);
       }
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
-        return data.map(mapRowToMsg);
+        return data.reverse().map(mapRowToMsg);
       } else if (error && sessionId) {
         // Fallback: if session_id column does not exist yet on Supabase
-        const fallback = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
+        const fallback = await supabase.from('chat_messages').select('*').order('created_at', { ascending: false }).limit(60);
         if (!fallback.error && fallback.data && fallback.data.length > 0) {
-          return fallback.data.map(mapRowToMsg);
+          return fallback.data.reverse().map(mapRowToMsg);
         }
       }
     } catch (e) {
